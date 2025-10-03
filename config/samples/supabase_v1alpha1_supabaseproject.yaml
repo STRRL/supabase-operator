@@ -1,0 +1,9 @@
+apiVersion: supabase.strrl.dev/v1alpha1
+kind: SupabaseProject
+metadata:
+  labels:
+    app.kubernetes.io/name: supabase-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: supabaseproject-sample
+spec:
+  # TODO(user): Add fields here
