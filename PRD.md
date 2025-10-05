@@ -116,5 +116,13 @@ The Supabase operator should focus on:
 2. Support all major Supabase features (Auth, Database REST API, Realtime, Storage, Metadata)
 3. Integrate seamlessly with existing PostgreSQL and object storage solutions
 4. Handle configuration updates and rolling upgrades
-5. Provide clear status reporting on resource health
+5. Provide clear status reporting on resource health (following patterns from Rook operator)
 6. Support both managed and external dependency modes
+
+### Architectural Inspiration
+
+The operator design takes inspiration from the [Rook](https://github.com/rook/rook) cloud-native storage orchestrator, particularly:
+- Granular status conditions and phase tracking
+- Component-aware reconciliation patterns
+- Comprehensive observability through conditions and events
+- Clean separation between spec and status subresources
