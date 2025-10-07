@@ -75,6 +75,8 @@ kubectl create secret generic s3-config \
   --from-literal=secretAccessKey=your-secret-key
 ```
 
+> **Note:** Use camelCase for secret keys: `accessKeyId` and `secretAccessKey` (not kebab-case)
+
 ### 3. Deploy SupabaseProject
 
 ```yaml
@@ -164,6 +166,27 @@ spec:
 | Storage   | 128Mi        | 100m      | 64Mi           | 50m         |
 | Meta      | 128Mi        | 100m      | 64Mi           | 50m         |
 
+## Database Initialization
+
+On first deployment, the operator automatically initializes your PostgreSQL database with:
+
+**Extensions:**
+- `pgcrypto` - Cryptographic functions
+- `uuid-ossp` - UUID generation
+- `pg_stat_statements` - Query statistics
+
+**Schemas:**
+- `auth` - Authentication data
+- `storage` - File metadata
+- `realtime` - Real-time subscriptions
+
+**Roles:**
+- `authenticator` - API request authenticator role
+- `anon` - Anonymous access role
+- `service_role` - Service-level access role with RLS bypass
+
+All initialization operations are idempotent and safe to re-run.
+
 ## Status Tracking
 
 The operator provides granular status reporting:
@@ -199,6 +222,92 @@ status:
 - `DeployingComponents`: Creating deployments
 - `Running`: All components healthy
 - `Failed`: Reconciliation error
+
+## Monitoring
+
+The operator exposes Prometheus metrics at `:8443/metrics`:
+
+```bash
+kubectl port-forward -n supabase-operator-system \
+  svc/supabase-operator-controller-manager-metrics-service 8443:8443
+```
+
+**Key metrics:**
+- `controller_runtime_reconcile_total` - Total reconciliations
+- `controller_runtime_reconcile_errors_total` - Reconciliation errors
+- `controller_runtime_reconcile_time_seconds` - Reconciliation duration
+- `workqueue_depth` - Controller work queue depth
+- `workqueue_adds_total` - Items added to work queue
+
+### ServiceMonitor
+
+If using Prometheus Operator, the operator includes a ServiceMonitor:
+
+```bash
+kubectl apply -k config/prometheus
+```
+
+## Troubleshooting
+
+### SupabaseProject stuck in "ValidatingDependencies"
+
+**Check secrets exist:**
+```bash
+kubectl get secret postgres-config s3-config
+```
+
+**Verify secret keys:**
+```bash
+kubectl get secret postgres-config -o jsonpath='{.data}' | jq
+```
+
+Required database secret keys: `host`, `port`, `database`, `username`, `password`
+Required storage secret keys: `endpoint`, `region`, `bucket`, `accessKeyId`, `secretAccessKey`
+
+### SupabaseProject in "Failed" phase
+
+**Check status message:**
+```bash
+kubectl get supabaseproject my-supabase -o jsonpath='{.status.message}'
+```
+
+**Check conditions:**
+```bash
+kubectl get supabaseproject my-supabase -o jsonpath='{.status.conditions}' | jq
+```
+
+**View controller logs:**
+```bash
+kubectl logs -n supabase-operator-system \
+  -l control-plane=controller-manager \
+  --tail=100
+```
+
+### Database initialization fails
+
+**Check database connectivity:**
+```bash
+kubectl run -it --rm debug --image=postgres:16 --restart=Never -- \
+  psql -h postgres.example.com -U postgres -d supabase
+```
+
+**Verify database permissions:**
+The database user must have `CREATEDB` or superuser privileges to create extensions and schemas.
+
+### Components not starting
+
+**Check pod status:**
+```bash
+kubectl get pods -l app.kubernetes.io/part-of=supabase
+```
+
+**Check pod logs:**
+```bash
+kubectl logs my-supabase-kong-xxx
+```
+
+**Verify resource limits:**
+Ensure your cluster has sufficient resources for all components.
 
 ## Development
 
