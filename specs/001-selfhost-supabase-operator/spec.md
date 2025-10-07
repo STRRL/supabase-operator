@@ -5,27 +5,6 @@
 **Status**: Draft
 **Input**: User description: "selfhost supabase operator, when we create a supabase project CRD in kube apiserver, we should provider the entire stack of supabase's component, but we do not take care about the postgresql and s3 part in this controller;"
 
-## Execution Flow (main)
-```
-1. Parse user description from Input
-   → If empty: ERROR "No feature description provided"
-2. Extract key concepts from description
-   → Identify: actors, actions, data, constraints
-3. For each unclear aspect:
-   → Mark with [NEEDS CLARIFICATION: specific question]
-4. Fill User Scenarios & Testing section
-   → If no clear user flow: ERROR "Cannot determine user scenarios"
-5. Generate Functional Requirements
-   → Each requirement must be testable
-   → Mark ambiguous requirements
-6. Identify Key Entities (if data involved)
-7. Run Review Checklist
-   → If any [NEEDS CLARIFICATION]: WARN "Spec has uncertainties"
-   → If implementation details found: ERROR "Remove tech details"
-8. Return: SUCCESS (spec ready for planning)
-```
-
----
 
 ## Clarifications
 
@@ -38,32 +17,6 @@
 - Q: Should we add component-specific conditions? → A: Full granular (Component + Dependency + NetworkReady + SecretsReady)
 - Q: What phases should SupabaseProject go through? → A: Component-aware with dependency validation
 
----
-
-## ⚡ Quick Guidelines
-- ✅ Focus on WHAT users need and WHY
-- ❌ Avoid HOW to implement (no tech stack, APIs, code structure)
-- 👥 Written for business stakeholders, not developers
-
-### Section Requirements
-- **Mandatory sections**: Must be completed for every feature
-- **Optional sections**: Include only when relevant to the feature
-- When a section doesn't apply, remove it entirely (don't leave as "N/A")
-
-### For AI Generation
-When creating this spec from a user prompt:
-1. **Mark all ambiguities**: Use [NEEDS CLARIFICATION: specific question] for any assumption you'd need to make
-2. **Don't guess**: If the prompt doesn't specify something (e.g., "login system" without auth method), mark it
-3. **Think like a tester**: Every vague requirement should fail the "testable and unambiguous" checklist item
-4. **Common underspecified areas**:
-   - User types and permissions
-   - Data retention/deletion policies
-   - Performance targets and scale
-   - Error handling behaviors
-   - Integration requirements
-   - Security/compliance needs
-
----
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -77,12 +30,12 @@ As a platform administrator, I want to deploy multiple isolated Supabase instanc
 4. **Given** a running SupabaseProject instance, **When** I delete the custom resource, **Then** all managed Supabase components are properly cleaned up while preserving external dependencies
 
 ### Edge Cases
-- What happens when external PostgreSQL becomes unavailable?
-- How does system handle partial deployment failures?
-- What occurs when required secrets or credentials are missing?
-- How does the operator handle version upgrades of Supabase components?
-- What happens when resource limits are exceeded during deployment?
-- How does system detect degraded state (some components unhealthy, high latency, or pod restarts)?
+- When external PostgreSQL becomes unavailable, the operator marks PostgreSQLConnected condition as False and enters reconciliation retry with exponential backoff
+- System handles partial deployment failures by maintaining per-component status tracking, allowing healthy components to continue running while failed components retry
+- When required secrets or credentials are missing, the operator blocks deployment and sets SecretsReady condition to False with descriptive error message
+- Operator handles version upgrades through rolling updates: updating one component at a time with health checks between updates (manual version changes in CRD spec)
+- When resource limits are exceeded during deployment, Kubernetes OOMKills the pod, operator detects via pod status and reports in component condition
+- System detects degraded state through health check endpoints, pod restart counts, and readiness probes, updating Degraded condition accordingly
 
 ## Requirements *(mandatory)*
 
@@ -103,6 +56,17 @@ As a platform administrator, I want to deploy multiple isolated Supabase instanc
 - **FR-015**: System MUST include granular Kubernetes conditions in status: standard conditions (Ready, Progressing, Available, Degraded), component-specific conditions (KongReady, AuthReady, RealtimeReady, StorageReady, PostgRESTReady, MetaReady), dependency conditions (PostgreSQLConnected, S3Connected), and infrastructure conditions (NetworkReady, SecretsReady)
 - **FR-014**: System MUST support external dependencies only - users provide PostgreSQL connection details (host, port, credentials) and S3-compatible storage configuration (endpoint, bucket, access keys)
 - **FR-016**: System MUST track deployment phase per component (e.g., Kong:ValidatingDeps, Auth:Deploying, Realtime:Running) with phases including: ValidatingDependencies, Deploying, Configuring, Running, Failed, and Updating
+- **FR-017**: System MUST handle PostgreSQL database initialization including creating required schemas (auth, storage, realtime), roles (authenticator, anon, service_role), and extensions (pgcrypto, pgjwt, uuid-ossp, pg_stat_statements) for Supabase components
+
+### Non-Functional Requirements
+- **NFR-001 (Performance)**: Reconciliation loop MUST complete within 5 seconds for warm cache scenarios (existing resources, no image pulls required)
+- **NFR-002 (Availability)**: Control plane operations MUST maintain 99.9% uptime, allowing for at most 8.76 hours downtime per year
+- **NFR-003 (Scalability)**: Single operator instance MUST support managing 100+ SupabaseProject resources across multiple namespaces without performance degradation
+- **NFR-004 (Security)**: All secrets MUST be encrypted at rest using Kubernetes native encryption, all inter-component communication MUST use TLS 1.2+
+- **NFR-005 (Reliability)**: System MUST handle transient failures (network timeouts, pod restarts) through exponential backoff retry with maximum 5 retries
+- **NFR-006 (Resource Efficiency)**: Operator pod MUST consume less than 256MB memory and 100m CPU under normal operation with 100 managed instances
+- **NFR-007 (Observability)**: All reconciliation operations MUST emit structured logs with correlation IDs, trace IDs, and operation duration metrics
+- **NFR-008 (Compatibility)**: Operator MUST support Kubernetes versions 1.25+ and be tested against latest 3 stable releases
 
 ### Key Entities *(include if feature involves data)*
 - **SupabaseProject**: Represents a complete Supabase instance with all its components, configuration, and status
@@ -128,17 +92,3 @@ As a platform administrator, I want to deploy multiple isolated Supabase instanc
 - [x] Scope is clearly bounded
 - [x] Dependencies and assumptions identified
 
----
-
-## Execution Status
-*Updated by main() during processing*
-
-- [x] User description parsed
-- [x] Key concepts extracted
-- [x] Ambiguities marked
-- [x] User scenarios defined
-- [x] Requirements generated
-- [x] Entities identified
-- [x] Review checklist passed
-
----

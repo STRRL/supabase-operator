@@ -1,17 +1,20 @@
 <!--
 Sync Impact Report:
-Version: 1.0.0 (initial constitution)
-Modified Principles: None (new constitution)
+Version: 1.1.0 (Amendment #1: External Dependency Decoupling)
+Modified Principles:
+  - Principle V: Added amendment for phased integration approach
 Added Sections:
   - Core Principles (I-VII)
   - Kubernetes Best Practices
   - Development Workflow
   - Governance
+  - Amendments (new)
 Templates Requiring Updates:
   ✅ plan-template.md (aligned with Kubebuilder principles)
   ✅ spec-template.md (aligned with operator requirements)
   ✅ tasks-template.md (aligned with TDD and controller patterns)
-Follow-up TODOs: None
+Follow-up TODOs:
+  - Phase 2: Implement operator integration for PostgreSQL/S3
 -->
 
 # Supabase Operator Constitution
@@ -44,9 +47,13 @@ Every custom resource MUST have a comprehensive status subresource with conditio
 
 ### V. Dependency Integration via Composition
 
-Supabase Operator MUST NOT reimplement functionality provided by existing operators. PostgreSQL MUST use CloudNativePG, Zalando, or Crunchy operators. Object storage MUST use MinIO Operator or cloud provider integrations. The operator MUST coordinate external resources through owner references and label selectors.
+~~Supabase Operator MUST NOT reimplement functionality provided by existing operators. PostgreSQL MUST use CloudNativePG, Zalando, or Crunchy operators. Object storage MUST use MinIO Operator or cloud provider integrations.~~ **[AMENDED - See Amendment #1]**
 
-**Rationale**: Kubernetes ecosystem thrives on composition. Reusing battle-tested operators reduces code, improves reliability, and provides users with best-in-class implementations for each component.
+The operator MUST coordinate external resources through owner references and label selectors.
+
+**Original Rationale**: Kubernetes ecosystem thrives on composition. Reusing battle-tested operators reduces code, improves reliability, and provides users with best-in-class implementations for each component.
+
+**Amendment #1 (2025-10-06)**: Phase 1 implementation accepts external PostgreSQL and S3 connections directly via configuration, following the principle of least knowledge and maintaining architectural decoupling. Phase 2 will introduce operator integrations as additional connection options. See Amendments section for full details.
 
 ### VI. Observability and Operations
 
@@ -114,4 +121,30 @@ This constitution supersedes all other development practices. All design decisio
 
 **Compliance Review**: All PRs MUST pass constitution checks. Complex features MUST document constitution compliance in design phase. Use `.specify/memory/constitution.md` for governance and `.specify/templates/agent-file-template.md` for runtime development guidance.
 
-**Version**: 1.0.0 | **Ratified**: 2025-10-02 | **Last Amended**: 2025-10-02
+## Amendments
+
+### Amendment #1: External Dependency Decoupling (2025-10-06)
+
+**Context**: Initial implementation phase requires flexibility in external dependency management.
+
+**Change**: Principle V is modified to allow direct connection to external PostgreSQL and S3 services in Phase 1, with operator integration deferred to Phase 2.
+
+**Rationale**:
+1. **Principle of Least Knowledge**: The operator should not need to understand how external PostgreSQL/S3 are managed, only how to connect to them
+2. **Architectural Decoupling**: Separates concerns between Supabase stack management (our responsibility) and database/storage provisioning (user's responsibility)
+3. **Progressive Enhancement**: Allows users with existing PostgreSQL/S3 infrastructure to adopt immediately without requiring specific operators
+4. **Reduced Complexity**: Simplifies initial implementation and testing by reducing external dependencies
+5. **Flexibility**: Users can bring any PostgreSQL (RDS, CloudSQL, self-managed) or S3-compatible storage without operator constraints
+
+**Implementation Approach**:
+- **Phase 1 (Current)**: Accept connection configuration via secrets containing host, port, credentials
+- **Phase 2 (Future)**: Add optional integration with PostgreSQL operators (CloudNativePG, Zalando, Crunchy) and MinIO
+- **Phase 3 (Future)**: Automatic discovery of operator-managed resources via labels/annotations
+
+**Migration Path**: Phase 1 configurations will remain supported. Phase 2 will add new CRD fields for operator references alongside existing connection fields.
+
+**Approved By**: Architecture decision based on incremental delivery and separation of concerns principles.
+
+---
+
+**Version**: 1.1.0 | **Ratified**: 2025-10-02 | **Last Amended**: 2025-10-06

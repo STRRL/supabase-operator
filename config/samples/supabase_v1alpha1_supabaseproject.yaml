@@ -1,3 +1,27 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-config
+  namespace: default
+stringData:
+  host: "postgres.example.com"
+  port: "5432"
+  database: "supabase"
+  username: "postgres"
+  password: "your-secure-password"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: s3-config
+  namespace: default
+stringData:
+  endpoint: "https://s3.example.com"
+  region: "us-east-1"
+  bucket: "supabase-storage"
+  accessKeyId: "your-access-key"
+  secretAccessKey: "your-secret-key"
+---
 apiVersion: supabase.strrl.dev/v1alpha1
 kind: SupabaseProject
 metadata:
@@ -5,5 +29,41 @@ metadata:
     app.kubernetes.io/name: supabase-operator
     app.kubernetes.io/managed-by: kustomize
   name: supabaseproject-sample
+  namespace: default
 spec:
-  # TODO(user): Add fields here
+  projectId: my-supabase-project
+
+  database:
+    secretRef:
+      name: postgres-config
+    sslMode: require
+    maxConnections: 50
+
+  storage:
+    secretRef:
+      name: s3-config
+    forcePathStyle: true
+
+  kong:
+    image: kong:2.8.1
+    replicas: 1
+
+  auth:
+    image: supabase/gotrue:v2.177.0
+    replicas: 1
+
+  postgrest:
+    image: postgrest/postgrest:v12.2.12
+    replicas: 1
+
+  realtime:
+    image: supabase/realtime:v2.34.47
+    replicas: 1
+
+  storageApi:
+    image: supabase/storage-api:v1.25.7
+    replicas: 1
+
+  meta:
+    image: supabase/postgres-meta:v0.91.0
+    replicas: 1

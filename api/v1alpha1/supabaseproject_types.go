@@ -1,45 +1,307 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// SupabaseProjectSpec defines the desired state of SupabaseProject
 type SupabaseProjectSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	ProjectID string `json:"projectId"`
 
-	// foo is an example field of SupabaseProject. Edit supabaseproject_types.go to remove/update
+	// +kubebuilder:validation:Required
+	Database DatabaseConfig `json:"database"`
+
+	// +kubebuilder:validation:Required
+	Storage StorageConfig `json:"storage"`
+
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	Kong *KongConfig `json:"kong,omitempty"`
+
+	// +optional
+	Auth *AuthConfig `json:"auth,omitempty"`
+
+	// +optional
+	Realtime *RealtimeConfig `json:"realtime,omitempty"`
+
+	// +optional
+	PostgREST *PostgRESTConfig `json:"postgrest,omitempty"`
+
+	// +optional
+	StorageAPI *StorageAPIConfig `json:"storageApi,omitempty"`
+
+	// +optional
+	Meta *MetaConfig `json:"meta,omitempty"`
+
+	// +optional
+	Ingress *IngressConfig `json:"ingress,omitempty"`
 }
 
-// SupabaseProjectStatus defines the observed state of SupabaseProject.
+type DatabaseConfig struct {
+	// +kubebuilder:validation:Required
+	SecretRef corev1.SecretReference `json:"secretRef"`
+
+	// +kubebuilder:default="require"
+	// +optional
+	SSLMode string `json:"sslMode,omitempty"`
+
+	// +kubebuilder:default=20
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	// +optional
+	MaxConnections int `json:"maxConnections,omitempty"`
+}
+
+type StorageConfig struct {
+	// +kubebuilder:validation:Required
+	SecretRef corev1.SecretReference `json:"secretRef"`
+
+	// +kubebuilder:default=true
+	// +optional
+	ForcePathStyle bool `json:"forcePathStyle,omitempty"`
+}
+
+type KongConfig struct {
+	// +kubebuilder:default="kong:2.8.1"
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +optional
+	ExtraEnv []corev1.EnvVar `json:"extraEnv,omitempty"`
+}
+
+type AuthConfig struct {
+	// +kubebuilder:default="supabase/gotrue:v2.177.0"
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +optional
+	SMTPSecretRef *corev1.SecretReference `json:"smtpSecretRef,omitempty"`
+
+	// +optional
+	OAuthSecretRef *corev1.SecretReference `json:"oauthSecretRef,omitempty"`
+
+	// +optional
+	ExtraEnv []corev1.EnvVar `json:"extraEnv,omitempty"`
+}
+
+type RealtimeConfig struct {
+	// +kubebuilder:default="supabase/realtime:v2.34.47"
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +optional
+	ExtraEnv []corev1.EnvVar `json:"extraEnv,omitempty"`
+}
+
+type PostgRESTConfig struct {
+	// +kubebuilder:default="postgrest/postgrest:v12.2.12"
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +optional
+	ExtraEnv []corev1.EnvVar `json:"extraEnv,omitempty"`
+}
+
+type StorageAPIConfig struct {
+	// +kubebuilder:default="supabase/storage-api:v1.25.7"
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +optional
+	ExtraEnv []corev1.EnvVar `json:"extraEnv,omitempty"`
+}
+
+type MetaConfig struct {
+	// +kubebuilder:default="supabase/postgres-meta:v0.91.0"
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +optional
+	ExtraEnv []corev1.EnvVar `json:"extraEnv,omitempty"`
+}
+
+type IngressConfig struct {
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// +optional
+	ClassName *string `json:"className,omitempty"`
+
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// +optional
+	Host string `json:"host,omitempty"`
+
+	// +optional
+	TLSSecretName string `json:"tlsSecretName,omitempty"`
+}
+
 type SupabaseProjectStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// +optional
+	Phase string `json:"phase,omitempty"`
 
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+	// +optional
+	Message string `json:"message,omitempty"`
 
-	// conditions represent the current state of the SupabaseProject resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// +optional
+	Components ComponentsStatus `json:"components,omitempty"`
+
+	// +optional
+	Dependencies DependenciesStatus `json:"dependencies,omitempty"`
+
+	// +optional
+	Endpoints EndpointsStatus `json:"endpoints,omitempty"`
+
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// +optional
+	LastReconcileTime *metav1.Time `json:"lastReconcileTime,omitempty"`
+}
+
+type ComponentsStatus struct {
+	// +optional
+	Kong ComponentStatus `json:"kong,omitempty"`
+
+	// +optional
+	Auth ComponentStatus `json:"auth,omitempty"`
+
+	// +optional
+	Realtime ComponentStatus `json:"realtime,omitempty"`
+
+	// +optional
+	PostgREST ComponentStatus `json:"postgrest,omitempty"`
+
+	// +optional
+	StorageAPI ComponentStatus `json:"storageApi,omitempty"`
+
+	// +optional
+	Meta ComponentStatus `json:"meta,omitempty"`
+}
+
+type ComponentStatus struct {
+	// +optional
+	Phase string `json:"phase,omitempty"`
+
+	// +optional
+	Ready bool `json:"ready,omitempty"`
+
+	// +optional
+	Version string `json:"version,omitempty"`
+
+	// +optional
+	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
+
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// +optional
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+}
+
+type DependenciesStatus struct {
+	// +optional
+	PostgreSQL DependencyStatus `json:"postgresql,omitempty"`
+
+	// +optional
+	S3 DependencyStatus `json:"s3,omitempty"`
+}
+
+type DependencyStatus struct {
+	Connected bool `json:"connected"`
+
+	// +optional
+	LastConnectedTime *metav1.Time `json:"lastConnectedTime,omitempty"`
+
+	// +optional
+	Error string `json:"error,omitempty"`
+
+	// +optional
+	LatencyMs int32 `json:"latencyMs,omitempty"`
+}
+
+type EndpointsStatus struct {
+	// +optional
+	API string `json:"api,omitempty"`
+
+	// +optional
+	Auth string `json:"auth,omitempty"`
+
+	// +optional
+	Realtime string `json:"realtime,omitempty"`
+
+	// +optional
+	Storage string `json:"storage,omitempty"`
+
+	// +optional
+	REST string `json:"rest,omitempty"`
 }
 
 // +kubebuilder:object:root=true

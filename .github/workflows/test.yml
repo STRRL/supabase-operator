@@ -17,6 +17,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Verify manifests
+        run: make manifests
+
       - name: Running Tests
         run: |
           go mod tidy
