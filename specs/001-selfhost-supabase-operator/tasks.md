@@ -80,17 +80,17 @@ Kubernetes operator using Kubebuilder standard layout:
 ## Phase 3.5: Status Management (TDD)
 
 ### Tests
-- [ ] T042 [P] Unit test for condition creation (Ready, Progressing, etc.) in internal/status/conditions_test.go
-- [ ] T043 [P] Unit test for condition updates and transitions in internal/status/conditions_test.go
-- [ ] T044 [P] Unit test for phase progression logic in internal/status/phase_test.go
-- [ ] T045 [P] Unit test for component status tracking in internal/status/component_test.go
+- [x] T042 [P] Unit test for condition creation (Ready, Progressing, etc.) in internal/status/conditions_test.go
+- [x] T043 [P] Unit test for condition updates and transitions in internal/status/conditions_test.go
+- [x] T044 [P] Unit test for phase progression logic in internal/status/phase_test.go
+- [x] T045 [P] Unit test for component status tracking in internal/status/component_test.go
 
 ### Implementation
-- [ ] T046 Implement standard condition helpers (Ready, Progressing, Available, Degraded) in internal/status/conditions.go
-- [ ] T047 Implement component-specific condition helpers (KongReady, AuthReady, RealtimeReady, StorageReady, PostgRESTReady, MetaReady) in internal/status/conditions.go
-- [ ] T048 Implement dependency condition helpers (PostgreSQLConnected, S3Connected) and infrastructure conditions (NetworkReady, SecretsReady) in internal/status/conditions.go
-- [ ] T049 Implement phase progression state machine in internal/status/phase.go
-- [ ] T050 Implement component status builder in internal/status/component.go
+- [x] T046 Implement standard condition helpers (Ready, Progressing, Available, Degraded) in internal/status/conditions.go
+- [x] T047 Implement component-specific condition helpers (KongReady, AuthReady, RealtimeReady, StorageReady, PostgRESTReady, MetaReady) in internal/status/conditions.go
+- [x] T048 Implement dependency condition helpers (PostgreSQLConnected, S3Connected) and infrastructure conditions (NetworkReady, SecretsReady) in internal/status/conditions.go
+- [x] T049 Implement phase progression state machine in internal/status/phase.go
+- [x] T050 Implement component status builder in internal/status/component.go
 
 ## Phase 3.6: Component Resource Builders (TDD)
 
