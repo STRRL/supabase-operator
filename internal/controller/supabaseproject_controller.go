@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	supabasev1alpha1 "github.com/strrl/supabase-operator/api/v1alpha1"
+	"github.com/strrl/supabase-operator/internal/database"
 	"github.com/strrl/supabase-operator/internal/resources"
 	"github.com/strrl/supabase-operator/internal/secrets"
 	"github.com/strrl/supabase-operator/internal/status"
@@ -92,6 +93,20 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		project.Status.Conditions = status.SetCondition(
 			project.Status.Conditions,
 			status.NewReadyCondition(metav1.ConditionFalse, "DependencyValidationFailed", err.Error()),
+		)
+		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
+			return ctrl.Result{}, updateErr
+		}
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	}
+
+	if err := r.initializeDatabase(ctx, project); err != nil {
+		logger.Error(err, "Failed to initialize database")
+		project.Status.Phase = status.PhaseFailed
+		project.Status.Message = fmt.Sprintf("Database initialization failed: %v", err)
+		project.Status.Conditions = status.SetCondition(
+			project.Status.Conditions,
+			status.NewReadyCondition(metav1.ConditionFalse, "DatabaseInitializationFailed", err.Error()),
 		)
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
@@ -230,6 +245,36 @@ func (r *SupabaseProjectReconciler) validateDependencies(ctx context.Context, pr
 
 	if err := secrets.ValidateStorageSecret(storageSecret); err != nil {
 		return fmt.Errorf("storage secret validation failed: %w", err)
+	}
+
+	return nil
+}
+
+func (r *SupabaseProjectReconciler) initializeDatabase(ctx context.Context, project *supabasev1alpha1.SupabaseProject) error {
+	dbSecret := &corev1.Secret{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: project.Namespace,
+		Name:      project.Spec.Database.SecretRef.Name,
+	}, dbSecret); err != nil {
+		return fmt.Errorf("failed to get database secret: %w", err)
+	}
+
+	sslMode := project.Spec.Database.SSLMode
+	if sslMode == "" {
+		sslMode = "require"
+	}
+
+	config := database.InitConfig{
+		Host:     string(dbSecret.Data["host"]),
+		Port:     string(dbSecret.Data["port"]),
+		Database: string(dbSecret.Data["database"]),
+		Username: string(dbSecret.Data["username"]),
+		Password: string(dbSecret.Data["password"]),
+		SSLMode:  sslMode,
+	}
+
+	if err := database.InitializeDatabase(ctx, config); err != nil {
+		return fmt.Errorf("failed to initialize database: %w", err)
 	}
 
 	return nil
