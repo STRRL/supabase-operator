@@ -38,7 +38,7 @@ Build a Kubernetes operator that deploys and manages complete Supabase instances
 **Primary Dependencies**: controller-runtime v0.22.1, k8s.io/client-go v0.34.0, Kubebuilder v4.0+
 **Storage**: External PostgreSQL (user-provided), External S3-compatible storage (user-provided)
 **Testing**: Go test with envtest (controller-runtime test environment), Ginkgo/Gomega
-**Target Platform**: Kubernetes 1.33+ clusters
+**Target Platform**: Kubernetes 1.25+ clusters
 **Project Type**: single (Kubernetes operator)
 **Performance Goals**: Handle 100+ SupabaseProject instances, reconciliation <5s per resource
 **Constraints**: Memory limits per spec (Kong 2.5GB, others 128-256MB), rolling updates required

@@ -60,6 +60,7 @@ func InitializeDatabase(ctx context.Context, config InitConfig) error {
 func createExtensions(ctx context.Context, conn *pgx.Conn) error {
 	extensions := []string{
 		"pgcrypto",
+		"pgjwt",
 		"uuid-ossp",
 		"pg_stat_statements",
 	}
@@ -135,6 +136,7 @@ func createRoles(ctx context.Context, conn *pgx.Conn) error {
 func GetInitSQL() []string {
 	return []string{
 		`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`,
+		`CREATE EXTENSION IF NOT EXISTS "pgjwt"`,
 		`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`,
 		`CREATE EXTENSION IF NOT EXISTS "pg_stat_statements"`,
 		`CREATE SCHEMA IF NOT EXISTS auth`,

@@ -47,7 +47,7 @@ Kubernetes operator using Kubebuilder standard layout:
 - [x] T018 [P] Define AuthConfig with image default in api/v1alpha1/supabaseproject_types.go
 - [x] T019 [P] Define RealtimeConfig with image default in api/v1alpha1/supabaseproject_types.go
 - [x] T020 [P] Define PostgRESTConfig with image default in api/v1alpha1/supabaseproject_types.go
-- [x] T021 [P] Define StorageAPIConfig with image default in api/v1alpha1/supabaseproject_types.go
+- [x] T021 [P] Define StorageApiConfig with image default in api/v1alpha1/supabaseproject_types.go
 - [x] T022 [P] Define MetaConfig with image default in api/v1alpha1/supabaseproject_types.go
 - [x] T023 Define SupabaseProjectStatus with conditions and components in api/v1alpha1/supabaseproject_types.go
 - [x] T024 Define ComponentsStatus and ComponentStatus in api/v1alpha1/supabaseproject_types.go
@@ -112,10 +112,10 @@ Kubernetes operator using Kubebuilder standard layout:
 - [x] T059 [P] Unit test for Realtime Deployment creation in internal/resources/realtime_test.go
 - [x] T060 [P] Unit test for Realtime Service creation in internal/resources/realtime_test.go
 
-### Tests for Storage API
-- [x] T061 [P] Unit test for Storage API Deployment creation in internal/resources/storage_test.go
-- [x] T062 [P] Unit test for Storage API Service creation in internal/resources/storage_test.go
-- [x] T063 [P] Unit test for Storage API S3 config injection in internal/resources/storage_test.go
+### Tests for StorageApi
+- [x] T061 [P] Unit test for StorageApi Deployment creation in internal/resources/storage_test.go
+- [x] T062 [P] Unit test for StorageApi Service creation in internal/resources/storage_test.go
+- [x] T063 [P] Unit test for StorageApi S3 config injection in internal/resources/storage_test.go
 
 ### Tests for Meta
 - [x] T064 [P] Unit test for Meta Deployment creation in internal/resources/meta_test.go
@@ -130,8 +130,8 @@ Kubernetes operator using Kubebuilder standard layout:
 - [x] T071 Implement PostgREST Service builder in internal/resources/postgrest.go
 - [x] T072 Implement Realtime Deployment builder with defaults (256MB, 200m CPU) in internal/resources/realtime.go
 - [x] T073 Implement Realtime Service builder in internal/resources/realtime.go
-- [x] T074 Implement Storage API Deployment builder with defaults (128MB, 100m CPU) in internal/resources/storage.go
-- [x] T075 Implement Storage API Service builder in internal/resources/storage.go
+- [x] T074 Implement StorageApi Deployment builder with defaults (128MB, 100m CPU) in internal/resources/storage.go
+- [x] T075 Implement StorageApi Service builder in internal/resources/storage.go
 - [x] T076 Implement Meta Deployment builder with defaults (128MB, 100m CPU) in internal/resources/meta.go
 - [x] T077 Implement Meta Service builder in internal/resources/meta.go
 
@@ -160,7 +160,7 @@ Kubernetes operator using Kubebuilder standard layout:
 - [x] T091 Implement Auth deployment reconciliation in internal/controller/supabaseproject_controller.go
 - [x] T092 Implement PostgREST deployment reconciliation in internal/controller/supabaseproject_controller.go
 - [x] T093 Implement Realtime deployment reconciliation in internal/controller/supabaseproject_controller.go
-- [x] T094 Implement Storage API deployment reconciliation in internal/controller/supabaseproject_controller.go
+- [x] T094 Implement StorageApi deployment reconciliation in internal/controller/supabaseproject_controller.go
 - [x] T095 Implement Meta deployment reconciliation in internal/controller/supabaseproject_controller.go
 - [x] T096 Implement status update logic for all conditions in internal/controller/supabaseproject_controller.go
 - [x] T097 Implement finalizer cleanup logic in internal/controller/supabaseproject_controller.go
@@ -184,15 +184,24 @@ Kubernetes operator using Kubebuilder standard layout:
 - [x] T110 [P] Prometheus ServiceMonitor configured in config/prometheus/monitor.yaml (controller-runtime provides standard metrics)
 - [x] T111 [P] Structured logging implemented via controller-runtime's log package
 - [x] T112 [P] Event recording capability available (not yet used in all state transitions)
+- [ ] T112a Implement event recording for all phase transitions (Pending, ValidatingDeps, Deploying, Running, Failed, Updating)
+- [ ] T112b Validate all 15 conditions from FR-015 are tracked: Ready, Progressing, Available, Degraded, KongReady, AuthReady, RealtimeReady, StorageReady, PostgRESTReady, MetaReady, PostgreSQLConnected, S3Connected, NetworkReady, SecretsReady
 
-## Phase 3.10: Documentation & Polish
+## Phase 3.10: Non-Functional Requirements Validation
+- [ ] T113a [P] Load test with 100+ SupabaseProject instances to verify NFR-003 (scalability)
+- [ ] T113b [P] Benchmark reconciliation timing for warm cache scenarios to verify NFR-001 (performance <5s)
+- [ ] T113c [P] Monitor operator resource consumption to verify NFR-006 (operator <256MB memory, <100m CPU)
+- [ ] T113d [P] Validate structured logging with correlation IDs to verify NFR-007 (observability)
+- [ ] T113e [P] Integration test for exponential backoff on transient failures to verify NFR-005 (reliability)
+
+## Phase 3.11: Documentation & Polish
 - [x] T113 [P] Updated README.md with installation, quickstart, database initialization, monitoring, and troubleshooting
 - [ ] T114 [P] Create docs/architecture.md documenting design decisions
 - [ ] T115 [P] Create docs/api-reference.md from CRD schema
 - [ ] T116 [P] Add code comments and package documentation
 - [ ] T117 [P] Run quickstart.md scenarios manually and verify
 - [x] T118 Verified all integration tests pass with `make test`
-- [ ] T119 Build operator image with `make docker-build`
+- [ ] T119 Build operator image with `make docker-build` (image must build successfully and pass vulnerability scan)
 - [ ] T120 Deploy to test cluster and verify end-to-end
 
 ## Dependencies
@@ -232,6 +241,10 @@ All setup tasks must complete before any other work
 - T107-T109 can be parallel [P]
 - T110-T112 can be parallel [P]
 
+### NFR Validation (T113a-T113e)
+- Can run in parallel after controller core
+- All tasks can be parallel [P]
+
 ### Documentation (T113-T120)
 - Documentation tasks (T113-T116) can be parallel [P]
 - T117-T120 must be sequential (manual testing → tests → build → deploy)
@@ -245,7 +258,7 @@ Task: "Define KongConfig with image default in api/v1alpha1/supabaseproject_type
 Task: "Define AuthConfig with image default in api/v1alpha1/supabaseproject_types.go"
 Task: "Define RealtimeConfig with image default in api/v1alpha1/supabaseproject_types.go"
 Task: "Define PostgRESTConfig with image default in api/v1alpha1/supabaseproject_types.go"
-Task: "Define StorageAPIConfig with image default in api/v1alpha1/supabaseproject_types.go"
+Task: "Define StorageApiConfig with image default in api/v1alpha1/supabaseproject_types.go"
 Task: "Define MetaConfig with image default in api/v1alpha1/supabaseproject_types.go"
 ```
 
@@ -296,4 +309,4 @@ Task: "E2E test: Delete and verify cleanup"
 ## Critical Path
 T001-T005 → T006-T014 → T015-T027 → T028-T031 → T078-T085 → T086-T099 → T117-T120
 
-Total estimated tasks: 120 tasks across 10 phases
+Total estimated tasks: 127 tasks across 11 phases

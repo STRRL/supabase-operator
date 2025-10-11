@@ -17,6 +17,14 @@
 - Q: Should we add component-specific conditions? → A: Full granular (Component + Dependency + NetworkReady + SecretsReady)
 - Q: What phases should SupabaseProject go through? → A: Component-aware with dependency validation
 
+### Session 2025-10-07
+- Q: Minimum Kubernetes version for operator compatibility? → A: 1.33+
+- Q: What upgrade strategy should be used when a new Supabase component version is incompatible with existing PostgreSQL schema migrations? → A: Block upgrade, require manual schema migration by user before operator proceeds
+- Q: What metrics should the operator expose for monitoring and alerting? → A: Basic: reconciliation count, error count, reconciliation duration only
+- Q: When multiple SupabaseProjects share the same external PostgreSQL instance, how should database isolation be enforced? → A: Separate databases - each SupabaseProject gets its own database
+- Q: Should TLS certificates be required for inter-component communication? → A: No, not necessary
+- Q: When external dependency credentials (PostgreSQL password, S3 access keys) are rotated in the Secret, how should the operator handle the update? → A: Automatic rolling restart of affected components to pick up new credentials
+
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -33,16 +41,17 @@ As a platform administrator, I want to deploy multiple isolated Supabase instanc
 - When external PostgreSQL becomes unavailable, the operator marks PostgreSQLConnected condition as False and enters reconciliation retry with exponential backoff
 - System handles partial deployment failures by maintaining per-component status tracking, allowing healthy components to continue running while failed components retry
 - When required secrets or credentials are missing, the operator blocks deployment and sets SecretsReady condition to False with descriptive error message
-- Operator handles version upgrades through rolling updates: updating one component at a time with health checks between updates (manual version changes in CRD spec)
+- Operator handles version upgrades through rolling updates: updating one component at a time with health checks between updates (users trigger upgrades by modifying component `image` field in SupabaseProject spec). If schema migration conflicts are detected due to manual user changes, operator blocks upgrade and sets condition with descriptive error requiring manual schema resolution before proceeding
 - When resource limits are exceeded during deployment, Kubernetes OOMKills the pod, operator detects via pod status and reports in component condition
 - System detects degraded state through health check endpoints, pod restart counts, and readiness probes, updating Degraded condition accordingly
+- When external dependency credentials (PostgreSQL password, S3 access keys) are rotated in referenced Secrets, operator watches Secret changes and triggers automatic rolling restart of affected components to pick up new credentials
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
-- **FR-001**: System MUST deploy all core Supabase components (Kong API Gateway, GoTrue Auth, PostgREST, Realtime, Storage API, Meta) when a SupabaseProject resource is created
-- **FR-002**: System MUST accept connection details for external PostgreSQL database (host, port, database, username, password/secret reference) and use it as the backing store for all Supabase services
-- **FR-003**: System MUST accept configuration for external S3-compatible object storage (endpoint, region, bucket name, access key, secret key) and use it for the Storage API component
+- **FR-001**: System MUST deploy all core Supabase components (Kong API Gateway, GoTrue Auth, PostgREST, Realtime, StorageApi, Meta) when a SupabaseProject resource is created, with status tracking via conditions defined in FR-015
+- **FR-002**: System MUST accept connection details for external PostgreSQL instance (host, port, database name, username, password/secret reference) and use it as the backing store for all Supabase services. Each SupabaseProject MUST use a separate database within the PostgreSQL instance for isolation when multiple projects share the same instance
+- **FR-003**: System MUST accept configuration for external S3-compatible object storage (endpoint, region, bucket name, access key, secret key) and use it for the StorageApi component
 - **FR-004**: System MUST generate and manage JWT secrets and API keys (ANON_KEY, SERVICE_ROLE_KEY) for each SupabaseProject instance
 - **FR-005**: System MUST report detailed deployment status through the SupabaseProject resource status including: individual component health (Ready/NotReady), deployed versions, service endpoints, observed generation for drift detection, and last successful reconciliation timestamp
 - **FR-006**: System MUST support updating deployed components when SupabaseProject specification changes using rolling update strategy with health checks between component updates
@@ -51,22 +60,23 @@ As a platform administrator, I want to deploy multiple isolated Supabase instanc
 - **FR-009**: System MUST expose service endpoints for client applications to connect to each Supabase instance
 - **FR-010**: System MUST validate that required external dependencies (PostgreSQL, S3) are accessible before deploying Supabase components
 - **FR-011**: System MUST handle component failures gracefully and attempt reconciliation to restore desired state
-- **FR-012**: System MUST support configuration of resource limits for each Supabase component with defaults: Kong (2.5GB memory, 500m CPU), Realtime (256MB memory, 200m CPU), Auth/GoTrue (128MB memory, 100m CPU), Storage API (128MB memory, 100m CPU), PostgREST (256MB memory, 200m CPU), Meta (128MB memory, 100m CPU)
+- **FR-012**: System MUST support configuration of resource limits for each Supabase component with defaults: Kong (2.5GB memory, 500m CPU), Realtime (256MB memory, 200m CPU), Auth/GoTrue (128MB memory, 100m CPU), StorageApi (128MB memory, 100m CPU), PostgREST (256MB memory, 200m CPU), Meta (128MB memory, 100m CPU)
 - **FR-013**: System MUST provide observability through logs and events for deployment operations and errors
+- **FR-014**: System MUST support external dependencies only - users provide PostgreSQL connection details (host, port, credentials) and S3-compatible storage configuration (endpoint, bucket, access keys) as specified in FR-002 and FR-003
 - **FR-015**: System MUST include granular Kubernetes conditions in status: standard conditions (Ready, Progressing, Available, Degraded), component-specific conditions (KongReady, AuthReady, RealtimeReady, StorageReady, PostgRESTReady, MetaReady), dependency conditions (PostgreSQLConnected, S3Connected), and infrastructure conditions (NetworkReady, SecretsReady)
-- **FR-014**: System MUST support external dependencies only - users provide PostgreSQL connection details (host, port, credentials) and S3-compatible storage configuration (endpoint, bucket, access keys)
 - **FR-016**: System MUST track deployment phase per component (e.g., Kong:ValidatingDeps, Auth:Deploying, Realtime:Running) with phases including: ValidatingDependencies, Deploying, Configuring, Running, Failed, and Updating
-- **FR-017**: System MUST handle PostgreSQL database initialization including creating required schemas (auth, storage, realtime), roles (authenticator, anon, service_role), and extensions (pgcrypto, pgjwt, uuid-ossp, pg_stat_statements) for Supabase components
+- **FR-017**: System MUST handle PostgreSQL database initialization including creating the dedicated database (if it does not exist), required schemas (auth, storage, realtime), roles (authenticator, anon, service_role), and extensions (pgcrypto, pgjwt, uuid-ossp, pg_stat_statements) for Supabase components within that isolated database
+- **FR-018**: System MUST watch referenced Secrets for external dependency credentials (PostgreSQL, S3) and automatically trigger rolling restart of affected components when credential values change to ensure components pick up updated credentials
 
 ### Non-Functional Requirements
-- **NFR-001 (Performance)**: Reconciliation loop MUST complete within 5 seconds for warm cache scenarios (existing resources, no image pulls required)
+- **NFR-001 (Performance)**: Reconciliation loop MUST complete within 5 seconds for warm cache scenarios, defined as: all Kubernetes resources already exist in cluster, container images already pulled on nodes, Kubernetes client cache populated, and no external dependency validation required (PostgreSQL/S3 already verified)
 - **NFR-002 (Availability)**: Control plane operations MUST maintain 99.9% uptime, allowing for at most 8.76 hours downtime per year
 - **NFR-003 (Scalability)**: Single operator instance MUST support managing 100+ SupabaseProject resources across multiple namespaces without performance degradation
-- **NFR-004 (Security)**: All secrets MUST be encrypted at rest using Kubernetes native encryption, all inter-component communication MUST use TLS 1.2+
+- **NFR-004 (Security)**: All secrets MUST be encrypted at rest using Kubernetes native encryption
 - **NFR-005 (Reliability)**: System MUST handle transient failures (network timeouts, pod restarts) through exponential backoff retry with maximum 5 retries
 - **NFR-006 (Resource Efficiency)**: Operator pod MUST consume less than 256MB memory and 100m CPU under normal operation with 100 managed instances
-- **NFR-007 (Observability)**: All reconciliation operations MUST emit structured logs with correlation IDs, trace IDs, and operation duration metrics
-- **NFR-008 (Compatibility)**: Operator MUST support Kubernetes versions 1.25+ and be tested against latest 3 stable releases
+- **NFR-007 (Observability)**: All reconciliation operations MUST emit structured logs with correlation IDs, trace IDs, and operation duration metrics. Operator MUST expose Prometheus-compatible metrics including: reconciliation count (total reconciliations), error count (failed reconciliations), and reconciliation duration (histogram of reconciliation latency)
+- **NFR-008 (Compatibility)**: Operator MUST support Kubernetes versions 1.33+ and be tested against latest 3 stable releases
 
 ### Key Entities *(include if feature involves data)*
 - **SupabaseProject**: Represents a complete Supabase instance with all its components, configuration, and status
