@@ -15,7 +15,7 @@ func BuildStorageDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploymen
 		replicas = project.Spec.StorageAPI.Replicas
 	}
 
-	image := "supabase/storage-api:v1.25.7"
+	image := "supabase/storage-api:v1.28.0"
 	if project.Spec.StorageAPI != nil && project.Spec.StorageAPI.Image != "" {
 		image = project.Spec.StorageAPI.Image
 	}
@@ -31,6 +31,174 @@ func BuildStorageDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploymen
 		"app.kubernetes.io/component":  "storage-api",
 		"app.kubernetes.io/part-of":    "supabase",
 		"app.kubernetes.io/managed-by": "supabase-operator",
+	}
+
+	// Build SSL mode
+	sslMode := project.Spec.Database.SSLMode
+	if sslMode == "" {
+		sslMode = "require"
+	}
+
+	env := []corev1.EnvVar{
+		{
+			Name: "ANON_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "anon-key",
+				},
+			},
+		},
+		{
+			Name: "SERVICE_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "service-role-key",
+				},
+			},
+		},
+		{
+			Name: "PGRST_JWT_SECRET",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "jwt-secret",
+				},
+			},
+		},
+		{
+			Name: "DB_HOST",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "host",
+				},
+			},
+		},
+		{
+			Name: "DB_PORT",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "port",
+				},
+			},
+		},
+		{
+			Name: "DB_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "database",
+				},
+			},
+		},
+		{
+			Name: "DB_USER",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "username",
+				},
+			},
+		},
+		{
+			Name: "DB_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "password",
+				},
+			},
+		},
+		{
+			Name:  "DB_SSL_MODE",
+			Value: sslMode,
+		},
+		{
+			Name:  "DATABASE_URL",
+			Value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)",
+		},
+		{
+			Name:  "FILE_SIZE_LIMIT",
+			Value: "52428800",
+		},
+		{
+			Name:  "STORAGE_BACKEND",
+			Value: "s3",
+		},
+		{
+			Name: "GLOBAL_S3_BUCKET",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Storage.SecretRef.Name,
+					},
+					Key: "bucket",
+				},
+			},
+		},
+		{
+			Name: "AWS_ACCESS_KEY_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Storage.SecretRef.Name,
+					},
+					Key: "accessKeyId",
+				},
+			},
+		},
+		{
+			Name: "AWS_SECRET_ACCESS_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Storage.SecretRef.Name,
+					},
+					Key: "secretAccessKey",
+				},
+			},
+		},
+		{
+			Name: "AWS_DEFAULT_REGION",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Storage.SecretRef.Name,
+					},
+					Key: "region",
+				},
+			},
+		},
+		{
+			Name: "S3_ENDPOINT",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Storage.SecretRef.Name,
+					},
+					Key: "endpoint",
+				},
+			},
+		},
 	}
 
 	deployment := &appsv1.Deployment{
@@ -54,6 +222,7 @@ func BuildStorageDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploymen
 							Name:      "storage",
 							Image:     image,
 							Resources: resources,
+							Env:       env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",

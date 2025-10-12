@@ -1,6 +1,8 @@
 package resources
 
 import (
+	"fmt"
+
 	"github.com/strrl/supabase-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -15,7 +17,7 @@ func BuildRealtimeDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployme
 		replicas = project.Spec.Realtime.Replicas
 	}
 
-	image := "supabase/realtime:v2.34.47"
+	image := "supabase/realtime:v2.51.11"
 	if project.Spec.Realtime != nil && project.Spec.Realtime.Image != "" {
 		image = project.Spec.Realtime.Image
 	}
@@ -31,6 +33,112 @@ func BuildRealtimeDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployme
 		"app.kubernetes.io/component":  "realtime",
 		"app.kubernetes.io/part-of":    "supabase",
 		"app.kubernetes.io/managed-by": "supabase-operator",
+	}
+
+	// Build SSL mode
+	sslMode := project.Spec.Database.SSLMode
+	if sslMode == "" {
+		sslMode = "require"
+	}
+
+	env := []corev1.EnvVar{
+		{
+			Name: "DB_HOST",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "host",
+				},
+			},
+		},
+		{
+			Name: "DB_PORT",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "port",
+				},
+			},
+		},
+		{
+			Name: "DB_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "database",
+				},
+			},
+		},
+		{
+			Name: "DB_USER",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "username",
+				},
+			},
+		},
+		{
+			Name: "DB_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "password",
+				},
+			},
+		},
+		{
+			Name:  "DATABASE_URL",
+			Value: fmt.Sprintf("postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=%s", sslMode),
+		},
+		{
+			Name: "JWT_SECRET",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "jwt-secret",
+				},
+			},
+		},
+		{
+			Name: "SECRET_KEY_BASE",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "jwt-secret",
+				},
+			},
+		},
+		{
+			Name:  "APP_NAME",
+			Value: "realtime",
+		},
+		{
+			Name:  "PORT",
+			Value: "4000",
+		},
+		{
+			Name:  "RLIMIT_NOFILE",
+			Value: "10000",
+		},
+		{
+			Name:  "SECURE_CHANNELS",
+			Value: "true",
+		},
 	}
 
 	deployment := &appsv1.Deployment{
@@ -54,6 +162,7 @@ func BuildRealtimeDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployme
 							Name:      "realtime",
 							Image:     image,
 							Resources: resources,
+							Env:       env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",

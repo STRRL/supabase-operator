@@ -9,3 +9,6 @@
 # Re-include Go module files
 !go.mod
 !go.sum
+
+# Re-include embedded SQL migration files
+!internal/database/migrations/sql/*.sql

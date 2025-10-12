@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: supabase-operator
-  newTag: v0.1.0
+  newTag: test

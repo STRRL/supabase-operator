@@ -6,6 +6,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	supabasev1alpha1 "github.com/strrl/supabase-operator/api/v1alpha1"
-	"github.com/strrl/supabase-operator/internal/database"
 	"github.com/strrl/supabase-operator/internal/resources"
 	"github.com/strrl/supabase-operator/internal/secrets"
 	"github.com/strrl/supabase-operator/internal/status"
@@ -38,8 +38,10 @@ type SupabaseProjectReconciler struct {
 // +kubebuilder:rbac:groups=supabase.strrl.dev,resources=supabaseprojects/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=supabase.strrl.dev,resources=supabaseprojects/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 
 func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -100,21 +102,9 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	if err := r.initializeDatabase(ctx, project); err != nil {
-		logger.Error(err, "Failed to initialize database")
-		project.Status.Phase = status.PhaseFailed
-		project.Status.Message = fmt.Sprintf("Database initialization failed: %v", err)
-		project.Status.Conditions = status.SetCondition(
-			project.Status.Conditions,
-			status.NewReadyCondition(metav1.ConditionFalse, "DatabaseInitializationFailed", err.Error()),
-		)
-		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
-			return ctrl.Result{}, updateErr
-		}
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-	}
-
+	// Generate JWT secrets first (needed by database init job)
 	project.Status.Phase = status.PhaseDeployingSecrets
+	project.Status.Message = status.GetPhaseMessage(status.PhaseDeployingSecrets)
 
 	if err := r.ensureJWTSecrets(ctx, project); err != nil {
 		logger.Error(err, "Failed to ensure JWT secrets")
@@ -126,9 +116,45 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// Initialize database with required extensions and roles via Kubernetes Job
+	project.Status.Phase = status.PhaseInitializingDatabase
+	project.Status.Message = status.GetPhaseMessage(status.PhaseInitializingDatabase)
+
+	jobResult, err := r.ensureDatabaseInitJob(ctx, project)
+	if err != nil {
+		logger.Error(err, "Failed to ensure database init job")
+		project.Status.Phase = status.PhaseFailed
+		project.Status.Message = fmt.Sprintf("Database initialization job failed: %v", err)
+		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
+			return ctrl.Result{}, updateErr
+		}
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// If job is still running, requeue and check later
+	if jobResult.Requeue {
+		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
+			return ctrl.Result{}, updateErr
+		}
+		return jobResult, nil
+	}
+
 	project.Status.Phase = status.PhaseDeployingComponents
 
 	componentsStatus := supabasev1alpha1.ComponentsStatus{}
+
+	// Create Kong ConfigMap
+	kongConfigMap := resources.BuildKongConfigMap(project)
+	if err := controllerutil.SetControllerReference(project, kongConfigMap, r.Scheme); err != nil {
+		return ctrl.Result{}, err
+	}
+	existingKongConfigMap := &corev1.ConfigMap{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: kongConfigMap.Namespace, Name: kongConfigMap.Name}, existingKongConfigMap); err != nil && apierrors.IsNotFound(err) {
+		if err := r.Create(ctx, kongConfigMap); err != nil {
+			logger.Error(err, "Failed to create Kong ConfigMap")
+			return ctrl.Result{}, err
+		}
+	}
 
 	if err := r.reconcileComponent(ctx, project, "kong", resources.BuildKongDeployment, resources.BuildKongService); err != nil {
 		logger.Error(err, "Failed to reconcile Kong")
@@ -250,34 +276,62 @@ func (r *SupabaseProjectReconciler) validateDependencies(ctx context.Context, pr
 	return nil
 }
 
-func (r *SupabaseProjectReconciler) initializeDatabase(ctx context.Context, project *supabasev1alpha1.SupabaseProject) error {
-	dbSecret := &corev1.Secret{}
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: project.Namespace,
-		Name:      project.Spec.Database.SecretRef.Name,
-	}, dbSecret); err != nil {
-		return fmt.Errorf("failed to get database secret: %w", err)
+func (r *SupabaseProjectReconciler) ensureDatabaseInitJob(ctx context.Context, project *supabasev1alpha1.SupabaseProject) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Create ConfigMap with SQL scripts
+	configMap := resources.BuildDatabaseInitConfigMap(project)
+	if err := controllerutil.SetControllerReference(project, configMap, r.Scheme); err != nil {
+		return ctrl.Result{}, err
 	}
 
-	sslMode := project.Spec.Database.SSLMode
-	if sslMode == "" {
-		sslMode = "require"
+	existingConfigMap := &corev1.ConfigMap{}
+	err := r.Get(ctx, client.ObjectKey{Namespace: configMap.Namespace, Name: configMap.Name}, existingConfigMap)
+	if err != nil && apierrors.IsNotFound(err) {
+		if err := r.Create(ctx, configMap); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to create database init configmap: %w", err)
+		}
+		logger.Info("Created database init ConfigMap")
 	}
 
-	config := database.InitConfig{
-		Host:     string(dbSecret.Data["host"]),
-		Port:     string(dbSecret.Data["port"]),
-		Database: string(dbSecret.Data["database"]),
-		Username: string(dbSecret.Data["username"]),
-		Password: string(dbSecret.Data["password"]),
-		SSLMode:  sslMode,
+	// Create Job
+	job := resources.BuildDatabaseInitJob(project)
+	if err := controllerutil.SetControllerReference(project, job, r.Scheme); err != nil {
+		return ctrl.Result{}, err
 	}
 
-	if err := database.InitializeDatabase(ctx, config); err != nil {
-		return fmt.Errorf("failed to initialize database: %w", err)
+	existingJob := &batchv1.Job{}
+	err = r.Get(ctx, client.ObjectKey{Namespace: job.Namespace, Name: job.Name}, existingJob)
+	if err != nil && apierrors.IsNotFound(err) {
+		if err := r.Create(ctx, job); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to create database init job: %w", err)
+		}
+		logger.Info("Created database init Job")
+		// Job just created, requeue to check status
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	} else if err != nil {
+		return ctrl.Result{}, err
 	}
 
-	return nil
+	// Check job status
+	if existingJob.Status.Succeeded > 0 {
+		logger.Info("Database initialization job completed successfully")
+		return ctrl.Result{}, nil
+	}
+
+	if existingJob.Status.Failed > 0 {
+		// Check if we've exhausted retries
+		if existingJob.Spec.BackoffLimit != nil && existingJob.Status.Failed > *existingJob.Spec.BackoffLimit {
+			return ctrl.Result{}, fmt.Errorf("database initialization job failed after %d attempts", existingJob.Status.Failed)
+		}
+		// Still retrying
+		logger.Info("Database initialization job failed, will retry", "attempts", existingJob.Status.Failed)
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	// Job is still running
+	logger.Info("Database initialization job is running", "active", existingJob.Status.Active)
+	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
 func (r *SupabaseProjectReconciler) ensureJWTSecrets(ctx context.Context, project *supabasev1alpha1.SupabaseProject) error {
@@ -350,6 +404,12 @@ func (r *SupabaseProjectReconciler) reconcileComponent(
 		} else {
 			return err
 		}
+	} else {
+		// Update existing deployment
+		existingDeployment.Spec = deployment.Spec
+		if err := r.Update(ctx, existingDeployment); err != nil {
+			return fmt.Errorf("failed to update %s deployment: %w", name, err)
+		}
 	}
 
 	service := serviceBuilder(project)
@@ -380,8 +440,10 @@ func (r *SupabaseProjectReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&supabasev1alpha1.SupabaseProject{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&batchv1.Job{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}).
+		Owns(&corev1.ConfigMap{}).
 		Named("supabaseproject").
 		Complete(r)
 }

@@ -15,7 +15,7 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 		replicas = project.Spec.PostgREST.Replicas
 	}
 
-	image := "postgrest/postgrest:v12.2.12"
+	image := "postgrest/postgrest:v13.0.7"
 	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Image != "" {
 		image = project.Spec.PostgREST.Image
 	}

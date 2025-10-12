@@ -33,6 +33,45 @@ func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
+	env := []corev1.EnvVar{
+		{
+			Name:  "KONG_DATABASE",
+			Value: "off",
+		},
+		{
+			Name:  "KONG_DECLARATIVE_CONFIG",
+			Value: "/etc/kong/kong.yml",
+		},
+		{
+			Name:  "KONG_PROXY_ACCESS_LOG",
+			Value: "/dev/stdout",
+		},
+		{
+			Name:  "KONG_ADMIN_ACCESS_LOG",
+			Value: "/dev/stdout",
+		},
+		{
+			Name:  "KONG_PROXY_ERROR_LOG",
+			Value: "/dev/stderr",
+		},
+		{
+			Name:  "KONG_ADMIN_ERROR_LOG",
+			Value: "/dev/stderr",
+		},
+		{
+			Name:  "KONG_ADMIN_LISTEN",
+			Value: "0.0.0.0:8001",
+		},
+		{
+			Name:  "KONG_DNS_ORDER",
+			Value: "LAST,A,CNAME",
+		},
+		{
+			Name:  "KONG_PLUGINS",
+			Value: "request-transformer,cors,key-auth,acl",
+		},
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      project.Name + "-kong",
@@ -54,6 +93,7 @@ func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 							Name:      "kong",
 							Image:     image,
 							Resources: resources,
+							Env:       env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "proxy",
@@ -71,6 +111,25 @@ func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 									Protocol:      corev1.ProtocolTCP,
 								},
 							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "kong-config",
+									MountPath: "/etc/kong",
+									ReadOnly:  true,
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "kong-config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: project.Name + "-kong-config",
+									},
+								},
+							},
 						},
 					},
 				},
@@ -86,6 +145,111 @@ func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 	}
 
 	return deployment
+}
+
+func BuildKongConfigMap(project *v1alpha1.SupabaseProject) *corev1.ConfigMap {
+	labels := map[string]string{
+		"app.kubernetes.io/name":       "kong",
+		"app.kubernetes.io/instance":   project.Name,
+		"app.kubernetes.io/component":  "api-gateway",
+		"app.kubernetes.io/part-of":    "supabase",
+		"app.kubernetes.io/managed-by": "supabase-operator",
+	}
+
+	kongConfig := `_format_version: "1.1"
+
+services:
+  - name: auth-v1-open
+    url: http://` + project.Name + `-auth:9999/verify
+    routes:
+      - name: auth-v1-open
+        strip_path: true
+        paths:
+          - /auth/v1/verify
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-callback
+    url: http://` + project.Name + `-auth:9999/callback
+    routes:
+      - name: auth-v1-open-callback
+        strip_path: true
+        paths:
+          - /auth/v1/callback
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-authorize
+    url: http://` + project.Name + `-auth:9999/authorize
+    routes:
+      - name: auth-v1-open-authorize
+        strip_path: true
+        paths:
+          - /auth/v1/authorize
+    plugins:
+      - name: cors
+
+  - name: auth-v1
+    url: http://` + project.Name + `-auth:9999/
+    routes:
+      - name: auth-v1-all
+        strip_path: true
+        paths:
+          - /auth/v1/
+    plugins:
+      - name: cors
+
+  - name: rest-v1
+    url: http://` + project.Name + `-postgrest:3000/
+    routes:
+      - name: rest-v1-all
+        strip_path: true
+        paths:
+          - /rest/v1/
+    plugins:
+      - name: cors
+
+  - name: realtime-v1
+    url: http://` + project.Name + `-realtime:4000/socket/
+    routes:
+      - name: realtime-v1-all
+        strip_path: true
+        paths:
+          - /realtime/v1/
+    plugins:
+      - name: cors
+
+  - name: storage-v1
+    url: http://` + project.Name + `-storage:5000/
+    routes:
+      - name: storage-v1-all
+        strip_path: true
+        paths:
+          - /storage/v1/
+    plugins:
+      - name: cors
+
+  - name: meta-v1
+    url: http://` + project.Name + `-meta:8080/
+    routes:
+      - name: meta-v1-all
+        strip_path: true
+        paths:
+          - /pg/
+    plugins:
+      - name: cors
+`
+
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      project.Name + "-kong-config",
+			Namespace: project.Namespace,
+			Labels:    labels,
+		},
+		Data: map[string]string{
+			"kong.yml": kongConfig,
+		},
+	}
 }
 
 func BuildKongService(project *v1alpha1.SupabaseProject) *corev1.Service {

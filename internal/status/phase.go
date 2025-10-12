@@ -3,6 +3,7 @@ package status
 const (
 	PhasePending                = "Pending"
 	PhaseValidatingDependencies = "ValidatingDependencies"
+	PhaseInitializingDatabase   = "InitializingDatabase"
 	PhaseDeployingSecrets       = "DeployingSecrets"
 	PhaseDeployingNetwork       = "DeployingNetwork"
 	PhaseDeployingComponents    = "DeployingComponents"
@@ -17,6 +18,7 @@ func GetPhaseMessage(phase string) string {
 	messages := map[string]string{
 		PhasePending:                "SupabaseProject is pending",
 		PhaseValidatingDependencies: "Validating external dependencies",
+		PhaseInitializingDatabase:   "Initializing database schemas and roles",
 		PhaseDeployingSecrets:       "Deploying secrets and credentials",
 		PhaseDeployingNetwork:       "Deploying network resources",
 		PhaseDeployingComponents:    "Deploying Supabase components",
@@ -52,7 +54,8 @@ func CanTransitionTo(currentPhase, targetPhase string) bool {
 
 	transitions := map[string][]string{
 		PhasePending:                {PhaseValidatingDependencies},
-		PhaseValidatingDependencies: {PhaseDeployingSecrets},
+		PhaseValidatingDependencies: {PhaseInitializingDatabase},
+		PhaseInitializingDatabase:   {PhaseDeployingSecrets},
 		PhaseDeployingSecrets:       {PhaseDeployingNetwork},
 		PhaseDeployingNetwork:       {PhaseDeployingComponents},
 		PhaseDeployingComponents:    {PhaseConfiguring},

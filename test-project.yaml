@@ -1,0 +1,14 @@
+apiVersion: supabase.strrl.dev/v1alpha1
+kind: SupabaseProject
+metadata:
+  name: test-project
+  namespace: test-supabase
+spec:
+  projectId: test-project
+  database:
+    secretRef:
+      name: test-db-creds
+    sslMode: disable
+  storage:
+    secretRef:
+      name: test-storage-creds

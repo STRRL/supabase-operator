@@ -39,6 +39,24 @@ type SupabaseProjectSpec struct {
 }
 
 type DatabaseConfig struct {
+	// SecretRef references a Secret containing PostgreSQL connection credentials.
+	//
+	// IMPORTANT: This operator currently only supports supabase/postgres image.
+	// The Secret must contain the following keys:
+	//   - host: PostgreSQL host (e.g., postgres.default.svc.cluster.local)
+	//   - port: PostgreSQL port (e.g., 5432)
+	//   - database: Database name (must be "postgres")
+	//   - username: PostgreSQL user (must have SUPERUSER or be supabase_admin)
+	//   - password: PostgreSQL password
+	//
+	// The user must have sufficient privileges to:
+	//   - CREATE DATABASE (for _supabase database)
+	//   - CREATE ROLE (for Supabase service roles)
+	//   - CREATE EXTENSION (for pg_net and other extensions)
+	//   - CREATE EVENT TRIGGER (requires superuser)
+	//
+	// Recommended: Use the "postgres" or "supabase_admin" user from supabase/postgres image.
+	//
 	// +kubebuilder:validation:Required
 	SecretRef corev1.SecretReference `json:"secretRef"`
 

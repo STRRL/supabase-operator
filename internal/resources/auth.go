@@ -15,7 +15,7 @@ func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		replicas = project.Spec.Auth.Replicas
 	}
 
-	image := "supabase/gotrue:v2.177.0"
+	image := "supabase/gotrue:v2.180.0"
 	if project.Spec.Auth != nil && project.Spec.Auth.Image != "" {
 		image = project.Spec.Auth.Image
 	}
@@ -31,6 +31,121 @@ func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		"app.kubernetes.io/component":  "authentication",
 		"app.kubernetes.io/part-of":    "supabase",
 		"app.kubernetes.io/managed-by": "supabase-operator",
+	}
+
+	// Build SSL mode
+	sslMode := project.Spec.Database.SSLMode
+	if sslMode == "" {
+		sslMode = "require"
+	}
+
+	env := []corev1.EnvVar{
+		{
+			Name:  "API_EXTERNAL_URL",
+			Value: "http://localhost:8000",
+		},
+		{
+			Name:  "GOTRUE_SITE_URL",
+			Value: "http://localhost:8000",
+		},
+		{
+			Name:  "GOTRUE_DB_DRIVER",
+			Value: "postgres",
+		},
+		{
+			Name: "DB_HOST",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "host",
+				},
+			},
+		},
+		{
+			Name: "DB_PORT",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "port",
+				},
+			},
+		},
+		{
+			Name: "DB_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "database",
+				},
+			},
+		},
+		{
+			Name: "DB_USER",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "username",
+				},
+			},
+		},
+		{
+			Name: "DB_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "password",
+				},
+			},
+		},
+		{
+			Name:  "DB_SSL_MODE",
+			Value: sslMode,
+		},
+		{
+			Name:  "GOTRUE_DB_DATABASE_URL",
+			Value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSL_MODE)",
+		},
+		{
+			Name: "GOTRUE_JWT_SECRET",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "jwt-secret",
+				},
+			},
+		},
+		{
+			Name:  "GOTRUE_JWT_EXP",
+			Value: "3600",
+		},
+		{
+			Name:  "GOTRUE_JWT_DEFAULT_GROUP_NAME",
+			Value: "authenticated",
+		},
+		{
+			Name:  "GOTRUE_DISABLE_SIGNUP",
+			Value: "false",
+		},
+		{
+			Name:  "GOTRUE_EXTERNAL_EMAIL_ENABLED",
+			Value: "true",
+		},
+		{
+			Name:  "GOTRUE_MAILER_AUTOCONFIRM",
+			Value: "true",
+		},
 	}
 
 	deployment := &appsv1.Deployment{
@@ -54,6 +169,7 @@ func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 							Name:      "auth",
 							Image:     image,
 							Resources: resources,
+							Env:       env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",

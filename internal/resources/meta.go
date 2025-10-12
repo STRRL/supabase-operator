@@ -15,7 +15,7 @@ func BuildMetaDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		replicas = project.Spec.Meta.Replicas
 	}
 
-	image := "supabase/postgres-meta:v0.91.0"
+	image := "supabase/postgres-meta:v0.91.6"
 	if project.Spec.Meta != nil && project.Spec.Meta.Image != "" {
 		image = project.Spec.Meta.Image
 	}

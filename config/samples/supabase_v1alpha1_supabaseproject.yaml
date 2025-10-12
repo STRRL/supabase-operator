@@ -4,11 +4,11 @@ metadata:
   name: postgres-config
   namespace: default
 stringData:
-  host: "postgres.example.com"
+  host: "postgres.dev-deps.svc.cluster.local"
   port: "5432"
   database: "supabase"
   username: "postgres"
-  password: "your-secure-password"
+  password: "postgres"
 ---
 apiVersion: v1
 kind: Secret
@@ -16,11 +16,11 @@ metadata:
   name: s3-config
   namespace: default
 stringData:
-  endpoint: "https://s3.example.com"
+  endpoint: "http://minio.dev-deps.svc.cluster.local:9000"
   region: "us-east-1"
   bucket: "supabase-storage"
-  accessKeyId: "your-access-key"
-  secretAccessKey: "your-secret-key"
+  accessKeyId: "minioadmin"
+  secretAccessKey: "minioadmin"
 ---
 apiVersion: supabase.strrl.dev/v1alpha1
 kind: SupabaseProject
@@ -36,7 +36,7 @@ spec:
   database:
     secretRef:
       name: postgres-config
-    sslMode: require
+    sslMode: disable
     maxConnections: 50
 
   storage:
@@ -49,21 +49,21 @@ spec:
     replicas: 1
 
   auth:
-    image: supabase/gotrue:v2.177.0
+    image: supabase/gotrue:v2.180.0
     replicas: 1
 
   postgrest:
-    image: postgrest/postgrest:v12.2.12
+    image: postgrest/postgrest:v13.0.7
     replicas: 1
 
   realtime:
-    image: supabase/realtime:v2.34.47
+    image: supabase/realtime:v2.51.11
     replicas: 1
 
   storageApi:
-    image: supabase/storage-api:v1.25.7
+    image: supabase/storage-api:v1.28.0
     replicas: 1
 
   meta:
-    image: supabase/postgres-meta:v0.91.0
+    image: supabase/postgres-meta:v0.91.6
     replicas: 1
