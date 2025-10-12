@@ -40,7 +40,7 @@ kubectl get nodes
 
 ```bash
 # Deploy PostgreSQL
-kubectl apply -f dev-postgres.yaml
+kubectl apply -f dev/dev-postgres.yaml
 
 # Wait for PostgreSQL to be ready
 kubectl wait --for=condition=ready pod -l app=postgres -n dev-deps --timeout=180s
@@ -93,7 +93,7 @@ supabase_storage_admin     | Login
 
 ```bash
 # Deploy MinIO
-kubectl apply -f dev-minio.yaml
+kubectl apply -f dev/dev-minio.yaml
 
 # Wait for MinIO to be ready
 kubectl wait --for=condition=ready pod -l app=minio -n dev-deps --timeout=120s
@@ -183,7 +183,7 @@ kubectl get crd supabaseprojects.supabase.strrl.dev
 
 ```bash
 # Create namespace and secrets
-kubectl apply -f dev-secrets.yaml
+kubectl apply -f dev/dev-secrets.yaml
 
 # Verify secrets exist
 kubectl get secrets -n test-supabase
@@ -209,7 +209,7 @@ kubectl get secret test-storage-creds -n test-supabase -o jsonpath='{.data}' | j
 
 ```bash
 # Apply SupabaseProject CR
-kubectl apply -f test-project.yaml
+kubectl apply -f dev/test-project.yaml
 
 # Watch the reconciliation process
 kubectl get supabaseproject test-project -n test-supabase -w
@@ -685,7 +685,7 @@ kubectl top pods -n test-supabase
 
 ```bash
 # Delete SupabaseProject
-kubectl delete -f test-project.yaml
+kubectl delete -f dev/test-project.yaml
 
 # Wait for finalizers to complete
 kubectl wait --for=delete supabaseproject/test-project -n test-supabase --timeout=60s
