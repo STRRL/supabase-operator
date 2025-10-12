@@ -12,6 +12,61 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+// Helper function to create test secrets
+func createTestSecrets() []client.Object {
+	return []client.Object{
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "db-secret",
+				Namespace: "default",
+			},
+			Data: map[string][]byte{
+				"host":     []byte("postgres.example.com"),
+				"port":     []byte("5432"),
+				"database": []byte("postgres"),
+				"username": []byte("user"),
+				"password": []byte("pass"),
+			},
+		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "storage-secret",
+				Namespace: "default",
+			},
+			Data: map[string][]byte{
+				"endpoint":        []byte("s3.example.com"),
+				"region":          []byte("us-east-1"),
+				"bucket":          []byte("supabase"),
+				"accessKeyId":     []byte("key"),
+				"secretAccessKey": []byte("secret"),
+			},
+		},
+	}
+}
+
+// Helper function to create test project
+func createTestProject() *SupabaseProject {
+	return &SupabaseProject{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-project",
+			Namespace: "default",
+		},
+		Spec: SupabaseProjectSpec{
+			ProjectID: "test-project",
+			Database: DatabaseConfig{
+				SecretRef: corev1.SecretReference{
+					Name: "db-secret",
+				},
+			},
+			Storage: StorageConfig{
+				SecretRef: corev1.SecretReference{
+					Name: "storage-secret",
+				},
+			},
+		},
+	}
+}
+
 func TestValidateCreate_SecretExistence(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
@@ -25,54 +80,9 @@ func TestValidateCreate_SecretExistence(t *testing.T) {
 		errMsg  string
 	}{
 		{
-			name: "valid with existing secrets",
-			project: &SupabaseProject{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-project",
-					Namespace: "default",
-				},
-				Spec: SupabaseProjectSpec{
-					ProjectID: "test-project",
-					Database: DatabaseConfig{
-						SecretRef: corev1.SecretReference{
-							Name: "db-secret",
-						},
-					},
-					Storage: StorageConfig{
-						SecretRef: corev1.SecretReference{
-							Name: "storage-secret",
-						},
-					},
-				},
-			},
-			secrets: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-secret",
-						Namespace: "default",
-					},
-					Data: map[string][]byte{
-						"host":     []byte("postgres.example.com"),
-						"port":     []byte("5432"),
-						"database": []byte("postgres"),
-						"username": []byte("user"),
-						"password": []byte("pass"),
-					},
-				},
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "storage-secret",
-						Namespace: "default",
-					},
-					Data: map[string][]byte{
-						"endpoint":        []byte("s3.example.com"),
-						"region":          []byte("us-east-1"),
-						"bucket":          []byte("supabase"),
-						"accessKeyId":     []byte("key"),
-						"secretAccessKey": []byte("secret"),
-					},
-				},
-			},
+			name:    "valid with existing secrets",
+			project: createTestProject(),
+			secrets: createTestSecrets(),
 			wantErr: false,
 		},
 		{
@@ -180,54 +190,9 @@ func TestValidateCreate_RequiredSecretKeys(t *testing.T) {
 		errMsg  string
 	}{
 		{
-			name: "valid with all required database keys",
-			project: &SupabaseProject{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-project",
-					Namespace: "default",
-				},
-				Spec: SupabaseProjectSpec{
-					ProjectID: "test-project",
-					Database: DatabaseConfig{
-						SecretRef: corev1.SecretReference{
-							Name: "db-secret",
-						},
-					},
-					Storage: StorageConfig{
-						SecretRef: corev1.SecretReference{
-							Name: "storage-secret",
-						},
-					},
-				},
-			},
-			secrets: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "db-secret",
-						Namespace: "default",
-					},
-					Data: map[string][]byte{
-						"host":     []byte("postgres.example.com"),
-						"port":     []byte("5432"),
-						"database": []byte("postgres"),
-						"username": []byte("user"),
-						"password": []byte("pass"),
-					},
-				},
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "storage-secret",
-						Namespace: "default",
-					},
-					Data: map[string][]byte{
-						"endpoint":        []byte("s3.example.com"),
-						"region":          []byte("us-east-1"),
-						"bucket":          []byte("supabase"),
-						"accessKeyId":     []byte("key"),
-						"secretAccessKey": []byte("secret"),
-					},
-				},
-			},
+			name:    "valid with all required database keys",
+			project: createTestProject(),
+			secrets: createTestSecrets(),
 			wantErr: false,
 		},
 		{
