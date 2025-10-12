@@ -1,0 +1,529 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: supabaseprojects.supabase.strrl.dev
+spec:
+  group: supabase.strrl.dev
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required:
+            - projectId
+            - database
+            - storage
+            properties:
+              projectId:
+                type: string
+                description: Unique identifier for the Supabase project
+                pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                maxLength: 63
+
+              version:
+                type: string
+                description: Version of Supabase components to deploy
+                default: "latest"
+
+              database:
+                type: object
+                description: External PostgreSQL database configuration
+                required:
+                - host
+                - database
+                - secretRef
+                properties:
+                  host:
+                    type: string
+                    description: PostgreSQL host address
+                  port:
+                    type: integer
+                    description: PostgreSQL port
+                    default: 5432
+                    minimum: 1
+                    maximum: 65535
+                  database:
+                    type: string
+                    description: Database name
+                  secretRef:
+                    type: object
+                    description: Reference to secret containing credentials
+                    required:
+                    - name
+                    properties:
+                      name:
+                        type: string
+                        description: Name of the secret
+                      usernameKey:
+                        type: string
+                        default: "username"
+                      passwordKey:
+                        type: string
+                        default: "password"
+                  sslMode:
+                    type: string
+                    description: PostgreSQL SSL mode
+                    default: "require"
+                    enum:
+                    - disable
+                    - require
+                    - verify-ca
+                    - verify-full
+                  maxConnections:
+                    type: integer
+                    description: Maximum database connections
+                    default: 20
+                    minimum: 1
+                    maximum: 100
+
+              storage:
+                type: object
+                description: S3-compatible object storage configuration
+                required:
+                - endpoint
+                - bucket
+                - secretRef
+                properties:
+                  endpoint:
+                    type: string
+                    description: S3-compatible storage endpoint URL
+                    pattern: '^https?://.*'
+                  region:
+                    type: string
+                    description: Storage region
+                    default: "us-east-1"
+                  bucket:
+                    type: string
+                    description: Storage bucket name
+                    pattern: '^[a-z0-9][a-z0-9.-]*[a-z0-9]$'
+                  secretRef:
+                    type: object
+                    description: Reference to secret containing S3 credentials
+                    required:
+                    - name
+                    properties:
+                      name:
+                        type: string
+                        description: Name of the secret
+                      accessKeyIdKey:
+                        type: string
+                        default: "accessKeyId"
+                      secretAccessKeyKey:
+                        type: string
+                        default: "secretAccessKey"
+                  forcePathStyle:
+                    type: boolean
+                    description: Force path-style S3 URLs (for MinIO)
+                    default: true
+
+              kong:
+                type: object
+                description: Kong API gateway configuration
+                properties:
+                  replicas:
+                    type: integer
+                    minimum: 0
+                    maximum: 10
+                    default: 1
+                  resources:
+                    type: object
+                    properties:
+                      limits:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+                      requests:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+
+              auth:
+                type: object
+                description: Auth service (GoTrue) configuration
+                properties:
+                  replicas:
+                    type: integer
+                    minimum: 0
+                    maximum: 10
+                    default: 1
+                  resources:
+                    type: object
+                    properties:
+                      limits:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+                      requests:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+                  smtp:
+                    type: object
+                    description: SMTP configuration for email
+                    properties:
+                      host:
+                        type: string
+                      port:
+                        type: integer
+                      user:
+                        type: string
+                      password:
+                        type: string
+                      from:
+                        type: string
+
+              realtime:
+                type: object
+                description: Realtime service configuration
+                properties:
+                  replicas:
+                    type: integer
+                    minimum: 0
+                    maximum: 10
+                    default: 1
+                  resources:
+                    type: object
+                    properties:
+                      limits:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+                      requests:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+
+              postgrest:
+                type: object
+                description: PostgREST configuration
+                properties:
+                  replicas:
+                    type: integer
+                    minimum: 0
+                    maximum: 10
+                    default: 1
+                  resources:
+                    type: object
+                    properties:
+                      limits:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+                      requests:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+
+              storageApi:
+                type: object
+                description: Storage API service configuration
+                properties:
+                  replicas:
+                    type: integer
+                    minimum: 0
+                    maximum: 10
+                    default: 1
+                  resources:
+                    type: object
+                    properties:
+                      limits:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+                      requests:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+
+              meta:
+                type: object
+                description: Meta service (pg-meta) configuration
+                properties:
+                  replicas:
+                    type: integer
+                    minimum: 0
+                    maximum: 10
+                    default: 1
+                  resources:
+                    type: object
+                    properties:
+                      limits:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+                      requests:
+                        type: object
+                        properties:
+                          cpu:
+                            type: string
+                          memory:
+                            type: string
+
+              ingress:
+                type: object
+                description: Ingress configuration for external access
+                properties:
+                  enabled:
+                    type: boolean
+                    default: false
+                  className:
+                    type: string
+                    default: "nginx"
+                  host:
+                    type: string
+                    description: Hostname for the Supabase instance
+                  tls:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: false
+                      secretName:
+                        type: string
+                        description: TLS certificate secret name
+
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                description: Current phase of the SupabaseProject
+                enum:
+                - Pending
+                - ValidatingDependencies
+                - DeployingSecrets
+                - DeployingNetwork
+                - DeployingComponents
+                - Configuring
+                - Running
+                - Updating
+                - Failed
+                - Terminating
+                - Terminated
+
+              message:
+                type: string
+                description: Human-readable status message
+
+              conditions:
+                type: array
+                description: Standard Kubernetes conditions
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    reason:
+                      type: string
+                    message:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+
+              components:
+                type: object
+                description: Status of individual Supabase components
+                properties:
+                  kong:
+                    type: object
+                    properties:
+                      phase:
+                        type: string
+                      ready:
+                        type: boolean
+                      version:
+                        type: string
+                      readyReplicas:
+                        type: integer
+                      replicas:
+                        type: integer
+                  auth:
+                    type: object
+                    properties:
+                      phase:
+                        type: string
+                      ready:
+                        type: boolean
+                      version:
+                        type: string
+                      readyReplicas:
+                        type: integer
+                      replicas:
+                        type: integer
+                  realtime:
+                    type: object
+                    properties:
+                      phase:
+                        type: string
+                      ready:
+                        type: boolean
+                      version:
+                        type: string
+                      readyReplicas:
+                        type: integer
+                      replicas:
+                        type: integer
+                  postgrest:
+                    type: object
+                    properties:
+                      phase:
+                        type: string
+                      ready:
+                        type: boolean
+                      version:
+                        type: string
+                      readyReplicas:
+                        type: integer
+                      replicas:
+                        type: integer
+                  storageApi:
+                    type: object
+                    properties:
+                      phase:
+                        type: string
+                      ready:
+                        type: boolean
+                      version:
+                        type: string
+                      readyReplicas:
+                        type: integer
+                      replicas:
+                        type: integer
+                  meta:
+                    type: object
+                    properties:
+                      phase:
+                        type: string
+                      ready:
+                        type: boolean
+                      version:
+                        type: string
+                      readyReplicas:
+                        type: integer
+                      replicas:
+                        type: integer
+
+              dependencies:
+                type: object
+                description: Status of external dependencies
+                properties:
+                  postgresql:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                      lastConnectedTime:
+                        type: string
+                        format: date-time
+                      error:
+                        type: string
+                      latencyMs:
+                        type: integer
+                  s3:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                      lastConnectedTime:
+                        type: string
+                        format: date-time
+                      error:
+                        type: string
+                      latencyMs:
+                        type: integer
+
+              endpoints:
+                type: object
+                description: Service endpoints for client access
+                properties:
+                  api:
+                    type: string
+                    description: Kong API gateway endpoint
+                  auth:
+                    type: string
+                    description: Auth service endpoint
+                  realtime:
+                    type: string
+                    description: Realtime websocket endpoint
+                  storage:
+                    type: string
+                    description: Storage API endpoint
+                  rest:
+                    type: string
+                    description: PostgREST endpoint
+
+              observedGeneration:
+                type: integer
+                description: Last observed generation of the resource
+
+              lastReconcileTime:
+                type: string
+                format: date-time
+                description: Timestamp of last successful reconciliation
+
+    subresources:
+      status: {}
+
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Ready
+      type: string
+      jsonPath: .status.conditions[?(@.type=="Ready")].status
+    - name: Message
+      type: string
+      jsonPath: .status.message
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+
+  scope: Namespaced
+  names:
+    plural: supabaseprojects
+    singular: supabaseproject
+    kind: SupabaseProject
+    shortNames:
+    - sbp
+    - supabase
