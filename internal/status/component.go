@@ -32,6 +32,8 @@ func SetComponentStatus(componentsStatus v1alpha1.ComponentsStatus, component st
 		componentsStatus.StorageAPI = status
 	case "Meta":
 		componentsStatus.Meta = status
+	case "Studio":
+		componentsStatus.Studio = status
 	}
 	return componentsStatus
 }
@@ -44,6 +46,7 @@ func AreAllComponentsReady(componentsStatus v1alpha1.ComponentsStatus) bool {
 		componentsStatus.PostgREST,
 		componentsStatus.StorageAPI,
 		componentsStatus.Meta,
+		componentsStatus.Studio,
 	}
 
 	for _, comp := range components {
@@ -74,6 +77,8 @@ func GetComponentByName(componentsStatus v1alpha1.ComponentsStatus, name string)
 		return componentsStatus.StorageAPI
 	case "Meta":
 		return componentsStatus.Meta
+	case "Studio":
+		return componentsStatus.Studio
 	default:
 		return v1alpha1.ComponentStatus{}
 	}

@@ -196,3 +196,48 @@ func TestBuildMetaDeployment(t *testing.T) {
 		t.Errorf("Expected name 'test-project-meta', got '%s'", deployment.Name)
 	}
 }
+
+func TestBuildStudioDeployment(t *testing.T) {
+	project := &v1alpha1.SupabaseProject{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-project",
+			Namespace: "default",
+		},
+		Spec: v1alpha1.SupabaseProjectSpec{
+			ProjectID: "test",
+			Database: v1alpha1.DatabaseConfig{
+				SecretRef: corev1.SecretReference{Name: "postgres-config"},
+			},
+		},
+	}
+
+	deployment := BuildStudioDeployment(project)
+
+	if deployment.Name != "test-project-studio" {
+		t.Errorf("Expected name 'test-project-studio', got '%s'", deployment.Name)
+	}
+
+	container := deployment.Spec.Template.Spec.Containers[0]
+	if container.Image != "supabase/studio:2025.10.01-sha-8460121" {
+		t.Errorf("Expected default image, got '%s'", container.Image)
+	}
+}
+
+func TestBuildStudioService(t *testing.T) {
+	project := &v1alpha1.SupabaseProject{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-project",
+			Namespace: "default",
+		},
+	}
+
+	service := BuildStudioService(project)
+
+	if service.Name != "test-project-studio" {
+		t.Errorf("Expected name 'test-project-studio', got '%s'", service.Name)
+	}
+
+	if len(service.Spec.Ports) != 1 {
+		t.Errorf("Expected 1 port, got %d", len(service.Spec.Ports))
+	}
+}

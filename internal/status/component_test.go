@@ -83,6 +83,7 @@ func TestSetComponentStatus_AllComponents(t *testing.T) {
 		"PostgREST":  NewComponentStatus(PhaseRunning, "postgrest/postgrest:v12.2.12", 1, 1),
 		"StorageAPI": NewComponentStatus(PhaseRunning, "supabase/storage-api:v1.25.7", 1, 1),
 		"Meta":       NewComponentStatus(PhaseRunning, "supabase/postgres-meta:v0.91.0", 1, 1),
+		"Studio":     NewComponentStatus(PhaseRunning, "supabase/studio:2025.10.01-sha-8460121", 1, 1),
 	}
 
 	for name, status := range components {
@@ -106,6 +107,9 @@ func TestSetComponentStatus_AllComponents(t *testing.T) {
 	}
 	if componentsStatus.Meta.Phase != PhaseRunning {
 		t.Error("Expected Meta to be Running")
+	}
+	if componentsStatus.Studio.Phase != PhaseRunning {
+		t.Error("Expected Studio to be Running")
 	}
 }
 
@@ -157,6 +161,7 @@ func TestAreAllComponentsReady(t *testing.T) {
 				cs = SetComponentStatus(cs, "PostgREST", NewComponentStatus(PhaseRunning, "postgrest/postgrest:v12.2.12", 1, 1))
 				cs = SetComponentStatus(cs, "StorageAPI", NewComponentStatus(PhaseRunning, "supabase/storage-api:v1.25.7", 1, 1))
 				cs = SetComponentStatus(cs, "Meta", NewComponentStatus(PhaseRunning, "supabase/postgres-meta:v0.91.0", 1, 1))
+				cs = SetComponentStatus(cs, "Studio", NewComponentStatus(PhaseRunning, "supabase/studio:2025.10.01-sha-8460121", 1, 1))
 				return cs
 			},
 			expected: true,

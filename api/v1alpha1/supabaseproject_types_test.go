@@ -310,6 +310,28 @@ func TestMetaConfig_Defaults(t *testing.T) {
 	}
 }
 
+func TestStudioConfig_Defaults(t *testing.T) {
+	config := &StudioConfig{}
+
+	expectedImage := "supabase/studio:2025.10.01-sha-8460121"
+	if config.Image == "" {
+		config.Image = expectedImage
+	}
+
+	if config.Image != expectedImage {
+		t.Errorf("Expected default image %s, got %s", expectedImage, config.Image)
+	}
+
+	expectedReplicas := int32(1)
+	if config.Replicas == 0 {
+		config.Replicas = expectedReplicas
+	}
+
+	if config.Replicas != expectedReplicas {
+		t.Errorf("Expected default replicas %d, got %d", expectedReplicas, config.Replicas)
+	}
+}
+
 func TestSupabaseProjectStatus_Structure(t *testing.T) {
 	status := SupabaseProjectStatus{
 		Phase:   "Running",
@@ -351,6 +373,10 @@ func TestComponentsStatus_Structure(t *testing.T) {
 			Phase:   "Running",
 			Version: "supabase/gotrue:v2.177.0",
 		},
+		Studio: ComponentStatus{
+			Phase:   "Running",
+			Version: "supabase/studio:2025.10.01-sha-8460121",
+		},
 	}
 
 	if components.Kong.Phase != "Running" {
@@ -359,5 +385,9 @@ func TestComponentsStatus_Structure(t *testing.T) {
 
 	if components.Auth.Version != "supabase/gotrue:v2.177.0" {
 		t.Errorf("Expected Auth version 'supabase/gotrue:v2.177.0', got '%s'", components.Auth.Version)
+	}
+
+	if components.Studio.Version != "supabase/studio:2025.10.01-sha-8460121" {
+		t.Errorf("Expected Studio version 'supabase/studio:2025.10.01-sha-8460121', got '%s'", components.Studio.Version)
 	}
 }

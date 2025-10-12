@@ -23,6 +23,7 @@ The operator manages:
 - **Realtime**: WebSocket server (v2.34.47)
 - **Storage API**: File storage service (v1.25.7)
 - **Meta**: PostgreSQL metadata service (v0.91.0)
+- **Studio**: Supabase management UI (2025.10.01-sha-8460121)
 
 **External dependencies** (user-provided):
 - PostgreSQL database
@@ -131,6 +132,42 @@ Access Kong API Gateway:
 ```bash
 kubectl port-forward svc/my-supabase-kong 8000:8000
 ```
+
+### 6. Retrieve Supabase API Keys
+
+The operator generates API keys and stores them in a secret named `<project>-jwt` within the same namespace as your `SupabaseProject`.
+
+```bash
+# Get the public ANON key
+ANON_KEY=$(kubectl get secret my-supabase-jwt \
+  -o jsonpath='{.data.ANON_KEY}' | base64 -d)
+
+# Get the Service Role key
+SERVICE_ROLE_KEY=$(kubectl get secret my-supabase-jwt \
+  -o jsonpath='{.data.SERVICE_ROLE_KEY}' | base64 -d)
+
+# Optional: discover the API endpoint
+API_URL=$(kubectl get supabaseproject my-supabase \
+  -o jsonpath='{.status.endpoints.api}')
+```
+
+Use `$ANON_KEY` for client-side requests and `$SERVICE_ROLE_KEY` for trusted backend workflows.
+
+### 7. Connect to Your Database
+
+Supabase components use the external PostgreSQL database you referenced via `postgres-config`. You can reuse the same credentials to connect with tools like `psql`.
+
+```bash
+POSTGRES_HOST=$(kubectl get secret postgres-config -o jsonpath='{.data.host}' | base64 -d)
+POSTGRES_PORT=$(kubectl get secret postgres-config -o jsonpath='{.data.port}' | base64 -d)
+POSTGRES_DB=$(kubectl get secret postgres-config -o jsonpath='{.data.database}' | base64 -d)
+POSTGRES_USER=$(kubectl get secret postgres-config -o jsonpath='{.data.username}' | base64 -d)
+POSTGRES_PASSWORD=$(kubectl get secret postgres-config -o jsonpath='{.data.password}' | base64 -d)
+
+psql "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+```
+
+If the database is only reachable inside the cluster (for example, over a private network), run `kubectl run` with a temporary pod or establish a VPN/tunnel that matches your deployment topology.
 
 ## Configuration
 

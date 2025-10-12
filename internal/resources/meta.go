@@ -99,6 +99,17 @@ func BuildMetaDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 			Name:  "PG_META_DB_SSL_MODE",
 			Value: sslMode,
 		},
+		{
+			Name: "CRYPTO_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "pg-meta-crypto-key",
+				},
+			},
+		},
 	}
 
 	deployment := &appsv1.Deployment{

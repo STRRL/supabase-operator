@@ -35,6 +35,9 @@ type SupabaseProjectSpec struct {
 	Meta *MetaConfig `json:"meta,omitempty"`
 
 	// +optional
+	Studio *StudioConfig `json:"studio,omitempty"`
+
+	// +optional
 	Ingress *IngressConfig `json:"ingress,omitempty"`
 }
 
@@ -194,6 +197,27 @@ type MetaConfig struct {
 	ExtraEnv []corev1.EnvVar `json:"extraEnv,omitempty"`
 }
 
+type StudioConfig struct {
+	// +kubebuilder:default="supabase/studio:2025.10.01-sha-8460121"
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// +optional
+	ExtraEnv []corev1.EnvVar `json:"extraEnv,omitempty"`
+
+	// +optional
+	PublicURL string `json:"publicUrl,omitempty"`
+}
+
 type IngressConfig struct {
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
@@ -257,6 +281,9 @@ type ComponentsStatus struct {
 
 	// +optional
 	Meta ComponentStatus `json:"meta,omitempty"`
+
+	// +optional
+	Studio ComponentStatus `json:"studio,omitempty"`
 }
 
 type ComponentStatus struct {
