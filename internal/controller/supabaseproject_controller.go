@@ -113,7 +113,7 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	// Initialize database with required extensions and roles via Kubernetes Job
@@ -128,11 +128,11 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	// If job is still running, requeue and check later
-	if jobResult.Requeue {
+	if jobResult.RequeueAfter > 0 {
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
@@ -141,86 +141,10 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	project.Status.Phase = status.PhaseDeployingComponents
 
-	componentsStatus := supabasev1alpha1.ComponentsStatus{}
-
-	// Create Kong ConfigMap
-	kongConfigMap := resources.BuildKongConfigMap(project)
-	if err := controllerutil.SetControllerReference(project, kongConfigMap, r.Scheme); err != nil {
+	componentsStatus, err := r.reconcileAllComponents(ctx, project)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
-	existingKongConfigMap := &corev1.ConfigMap{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: kongConfigMap.Namespace, Name: kongConfigMap.Name}, existingKongConfigMap); err != nil && apierrors.IsNotFound(err) {
-		if err := r.Create(ctx, kongConfigMap); err != nil {
-			logger.Error(err, "Failed to create Kong ConfigMap")
-			return ctrl.Result{}, err
-		}
-	}
-
-	if err := r.reconcileComponent(ctx, project, "kong", resources.BuildKongDeployment, resources.BuildKongService); err != nil {
-		logger.Error(err, "Failed to reconcile Kong")
-		return ctrl.Result{}, err
-	}
-	kongImage := "kong:2.8.1"
-	if project.Spec.Kong != nil && project.Spec.Kong.Image != "" {
-		kongImage = project.Spec.Kong.Image
-	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "Kong",
-		status.NewComponentStatus(status.PhaseRunning, kongImage, 1, 1))
-
-	if err := r.reconcileComponent(ctx, project, "auth", resources.BuildAuthDeployment, resources.BuildAuthService); err != nil {
-		logger.Error(err, "Failed to reconcile Auth")
-		return ctrl.Result{}, err
-	}
-	authImage := "supabase/gotrue:v2.177.0"
-	if project.Spec.Auth != nil && project.Spec.Auth.Image != "" {
-		authImage = project.Spec.Auth.Image
-	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "Auth",
-		status.NewComponentStatus(status.PhaseRunning, authImage, 1, 1))
-
-	if err := r.reconcileComponent(ctx, project, "postgrest", resources.BuildPostgRESTDeployment, resources.BuildPostgRESTService); err != nil {
-		logger.Error(err, "Failed to reconcile PostgREST")
-		return ctrl.Result{}, err
-	}
-	postgrestImage := "postgrest/postgrest:v12.2.12"
-	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Image != "" {
-		postgrestImage = project.Spec.PostgREST.Image
-	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "PostgREST",
-		status.NewComponentStatus(status.PhaseRunning, postgrestImage, 1, 1))
-
-	if err := r.reconcileComponent(ctx, project, "realtime", resources.BuildRealtimeDeployment, resources.BuildRealtimeService); err != nil {
-		logger.Error(err, "Failed to reconcile Realtime")
-		return ctrl.Result{}, err
-	}
-	realtimeImage := "supabase/realtime:v2.34.47"
-	if project.Spec.Realtime != nil && project.Spec.Realtime.Image != "" {
-		realtimeImage = project.Spec.Realtime.Image
-	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "Realtime",
-		status.NewComponentStatus(status.PhaseRunning, realtimeImage, 1, 1))
-
-	if err := r.reconcileComponent(ctx, project, "storage", resources.BuildStorageDeployment, resources.BuildStorageService); err != nil {
-		logger.Error(err, "Failed to reconcile Storage")
-		return ctrl.Result{}, err
-	}
-	storageImage := "supabase/storage-api:v1.25.7"
-	if project.Spec.StorageAPI != nil && project.Spec.StorageAPI.Image != "" {
-		storageImage = project.Spec.StorageAPI.Image
-	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "StorageAPI",
-		status.NewComponentStatus(status.PhaseRunning, storageImage, 1, 1))
-
-	if err := r.reconcileComponent(ctx, project, "meta", resources.BuildMetaDeployment, resources.BuildMetaService); err != nil {
-		logger.Error(err, "Failed to reconcile Meta")
-		return ctrl.Result{}, err
-	}
-	metaImage := "supabase/postgres-meta:v0.91.0"
-	if project.Spec.Meta != nil && project.Spec.Meta.Image != "" {
-		metaImage = project.Spec.Meta.Image
-	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "Meta",
-		status.NewComponentStatus(status.PhaseRunning, metaImage, 1, 1))
 
 	project.Status.Components = componentsStatus
 	project.Status.Phase = status.PhaseRunning
@@ -246,6 +170,92 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *SupabaseProjectReconciler) reconcileAllComponents(ctx context.Context, project *supabasev1alpha1.SupabaseProject) (supabasev1alpha1.ComponentsStatus, error) {
+	logger := log.FromContext(ctx)
+	componentsStatus := supabasev1alpha1.ComponentsStatus{}
+
+	// Create Kong ConfigMap
+	kongConfigMap := resources.BuildKongConfigMap(project)
+	if err := controllerutil.SetControllerReference(project, kongConfigMap, r.Scheme); err != nil {
+		return componentsStatus, err
+	}
+	existingKongConfigMap := &corev1.ConfigMap{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: kongConfigMap.Namespace, Name: kongConfigMap.Name}, existingKongConfigMap); err != nil && apierrors.IsNotFound(err) {
+		if err := r.Create(ctx, kongConfigMap); err != nil {
+			logger.Error(err, "Failed to create Kong ConfigMap")
+			return componentsStatus, err
+		}
+	}
+
+	if err := r.reconcileComponent(ctx, project, "kong", resources.BuildKongDeployment, resources.BuildKongService); err != nil {
+		logger.Error(err, "Failed to reconcile Kong")
+		return componentsStatus, err
+	}
+	kongImage := "kong:2.8.1"
+	if project.Spec.Kong != nil && project.Spec.Kong.Image != "" {
+		kongImage = project.Spec.Kong.Image
+	}
+	componentsStatus = status.SetComponentStatus(componentsStatus, "Kong",
+		status.NewComponentStatus(status.PhaseRunning, kongImage, 1, 1))
+
+	if err := r.reconcileComponent(ctx, project, "auth", resources.BuildAuthDeployment, resources.BuildAuthService); err != nil {
+		logger.Error(err, "Failed to reconcile Auth")
+		return componentsStatus, err
+	}
+	authImage := "supabase/gotrue:v2.180.0"
+	if project.Spec.Auth != nil && project.Spec.Auth.Image != "" {
+		authImage = project.Spec.Auth.Image
+	}
+	componentsStatus = status.SetComponentStatus(componentsStatus, "Auth",
+		status.NewComponentStatus(status.PhaseRunning, authImage, 1, 1))
+
+	if err := r.reconcileComponent(ctx, project, "postgrest", resources.BuildPostgRESTDeployment, resources.BuildPostgRESTService); err != nil {
+		logger.Error(err, "Failed to reconcile PostgREST")
+		return componentsStatus, err
+	}
+	postgrestImage := "postgrest/postgrest:v13.0.7"
+	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Image != "" {
+		postgrestImage = project.Spec.PostgREST.Image
+	}
+	componentsStatus = status.SetComponentStatus(componentsStatus, "PostgREST",
+		status.NewComponentStatus(status.PhaseRunning, postgrestImage, 1, 1))
+
+	if err := r.reconcileComponent(ctx, project, "realtime", resources.BuildRealtimeDeployment, resources.BuildRealtimeService); err != nil {
+		logger.Error(err, "Failed to reconcile Realtime")
+		return componentsStatus, err
+	}
+	realtimeImage := "supabase/realtime:v2.51.11"
+	if project.Spec.Realtime != nil && project.Spec.Realtime.Image != "" {
+		realtimeImage = project.Spec.Realtime.Image
+	}
+	componentsStatus = status.SetComponentStatus(componentsStatus, "Realtime",
+		status.NewComponentStatus(status.PhaseRunning, realtimeImage, 1, 1))
+
+	if err := r.reconcileComponent(ctx, project, "storage", resources.BuildStorageDeployment, resources.BuildStorageService); err != nil {
+		logger.Error(err, "Failed to reconcile Storage")
+		return componentsStatus, err
+	}
+	storageImage := "supabase/storage-api:v1.28.0"
+	if project.Spec.StorageAPI != nil && project.Spec.StorageAPI.Image != "" {
+		storageImage = project.Spec.StorageAPI.Image
+	}
+	componentsStatus = status.SetComponentStatus(componentsStatus, "StorageAPI",
+		status.NewComponentStatus(status.PhaseRunning, storageImage, 1, 1))
+
+	if err := r.reconcileComponent(ctx, project, "meta", resources.BuildMetaDeployment, resources.BuildMetaService); err != nil {
+		logger.Error(err, "Failed to reconcile Meta")
+		return componentsStatus, err
+	}
+	metaImage := "supabase/postgres-meta:v0.102.0"
+	if project.Spec.Meta != nil && project.Spec.Meta.Image != "" {
+		metaImage = project.Spec.Meta.Image
+	}
+	componentsStatus = status.SetComponentStatus(componentsStatus, "Meta",
+		status.NewComponentStatus(status.PhaseRunning, metaImage, 1, 1))
+
+	return componentsStatus, nil
 }
 
 func (r *SupabaseProjectReconciler) validateDependencies(ctx context.Context, project *supabasev1alpha1.SupabaseProject) error {

@@ -120,7 +120,7 @@ func TestBuildAuthDeployment(t *testing.T) {
 		t.Errorf("Expected name 'test-project-auth', got '%s'", deployment.Name)
 	}
 
-	if deployment.Spec.Template.Spec.Containers[0].Image != "supabase/gotrue:v2.177.0" {
+	if deployment.Spec.Template.Spec.Containers[0].Image != "supabase/gotrue:v2.180.0" {
 		t.Errorf("Expected default image, got '%s'", deployment.Spec.Template.Spec.Containers[0].Image)
 	}
 }

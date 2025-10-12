@@ -40,7 +40,13 @@ func InitializeDatabase(ctx context.Context, config InitConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-	defer conn.Close(ctx)
+	defer func() {
+		if closeErr := conn.Close(ctx); closeErr != nil {
+			// Log the error but don't override the return value
+			// since this is cleanup code
+			_ = closeErr
+		}
+	}()
 
 	if err := createExtensions(ctx, conn); err != nil {
 		return fmt.Errorf("failed to create extensions: %w", err)

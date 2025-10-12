@@ -36,7 +36,7 @@ func BuildStorageDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploymen
 	// Build SSL mode
 	sslMode := project.Spec.Database.SSLMode
 	if sslMode == "" {
-		sslMode = "require"
+		sslMode = defaultSSLMode
 	}
 
 	env := []corev1.EnvVar{

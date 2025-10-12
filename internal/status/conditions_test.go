@@ -9,7 +9,7 @@ import (
 func TestNewReadyCondition(t *testing.T) {
 	condition := NewReadyCondition(metav1.ConditionTrue, "AllReady", "All components ready")
 
-	if condition.Type != "Ready" {
+	if condition.Type != ConditionTypeReady {
 		t.Errorf("Expected type 'Ready', got '%s'", condition.Type)
 	}
 
@@ -33,7 +33,7 @@ func TestNewReadyCondition(t *testing.T) {
 func TestNewProgressingCondition(t *testing.T) {
 	condition := NewProgressingCondition(metav1.ConditionTrue, "Reconciling", "Reconciliation in progress")
 
-	if condition.Type != "Progressing" {
+	if condition.Type != ConditionTypeProgressing {
 		t.Errorf("Expected type 'Progressing', got '%s'", condition.Type)
 	}
 
@@ -45,7 +45,7 @@ func TestNewProgressingCondition(t *testing.T) {
 func TestNewAvailableCondition(t *testing.T) {
 	condition := NewAvailableCondition(metav1.ConditionTrue, "ServicesReady", "All services available")
 
-	if condition.Type != "Available" {
+	if condition.Type != ConditionTypeAvailable {
 		t.Errorf("Expected type 'Available', got '%s'", condition.Type)
 	}
 }
@@ -53,7 +53,7 @@ func TestNewAvailableCondition(t *testing.T) {
 func TestNewDegradedCondition(t *testing.T) {
 	condition := NewDegradedCondition(metav1.ConditionTrue, "ComponentFailed", "Kong deployment failed")
 
-	if condition.Type != "Degraded" {
+	if condition.Type != ConditionTypeDegraded {
 		t.Errorf("Expected type 'Degraded', got '%s'", condition.Type)
 	}
 }
@@ -90,7 +90,7 @@ func TestSetCondition(t *testing.T) {
 		t.Errorf("Expected 1 condition, got %d", len(conditions))
 	}
 
-	if conditions[0].Type != "Ready" {
+	if conditions[0].Type != ConditionTypeReady {
 		t.Errorf("Expected condition type 'Ready', got '%s'", conditions[0].Type)
 	}
 
@@ -127,11 +127,11 @@ func TestSetCondition_MultipleConditions(t *testing.T) {
 
 	for _, cond := range conditions {
 		switch cond.Type {
-		case "Ready":
+		case ConditionTypeReady:
 			hasReady = true
-		case "Progressing":
+		case ConditionTypeProgressing:
 			hasProgressing = true
-		case "Available":
+		case ConditionTypeAvailable:
 			hasAvailable = true
 		}
 	}
@@ -147,11 +147,11 @@ func TestIsConditionTrue(t *testing.T) {
 		NewProgressingCondition(metav1.ConditionFalse, "NotProgressing", "Not progressing"),
 	}
 
-	if !IsConditionTrue(conditions, "Ready") {
+	if !IsConditionTrue(conditions, ConditionTypeReady) {
 		t.Error("Expected Ready condition to be true")
 	}
 
-	if IsConditionTrue(conditions, "Progressing") {
+	if IsConditionTrue(conditions, ConditionTypeProgressing) {
 		t.Error("Expected Progressing condition to be false")
 	}
 
