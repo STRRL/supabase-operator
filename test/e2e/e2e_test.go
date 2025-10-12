@@ -502,7 +502,7 @@ stringData:
 `, name, namespace)
 
 	for key, value := range data {
-		manifest += fmt.Sprintf("  %s: %s\n", key, value)
+		manifest += fmt.Sprintf("  %s: %q\n", key, value)
 	}
 
 	cmd := exec.Command("kubectl", "delete", "secret", name, "-n", namespace, "--ignore-not-found=true")
