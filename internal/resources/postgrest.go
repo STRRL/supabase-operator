@@ -33,6 +33,86 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
+	// Build SSL mode
+	sslMode := project.Spec.Database.SSLMode
+	if sslMode == "" {
+		sslMode = "require"
+	}
+
+	env := []corev1.EnvVar{
+		{
+			Name: "DB_HOST",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "host",
+				},
+			},
+		},
+		{
+			Name: "DB_PORT",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "port",
+				},
+			},
+		},
+		{
+			Name: "DB_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "database",
+				},
+			},
+		},
+		{
+			Name: "DB_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "password",
+				},
+			},
+		},
+		{
+			Name:  "PGRST_DB_URI",
+			Value: "postgres://authenticator:$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=" + sslMode,
+		},
+		{
+			Name: "PGRST_JWT_SECRET",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "jwt-secret",
+				},
+			},
+		},
+		{
+			Name:  "PGRST_DB_ANON_ROLE",
+			Value: "anon",
+		},
+		{
+			Name:  "PGRST_DB_SCHEMA",
+			Value: "public",
+		},
+		{
+			Name:  "PGRST_DB_EXTRA_SEARCH_PATH",
+			Value: "public",
+		},
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      project.Name + "-postgrest",
@@ -54,6 +134,7 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 							Name:      "postgrest",
 							Image:     image,
 							Resources: resources,
+							Env:       env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",

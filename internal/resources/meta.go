@@ -33,6 +33,74 @@ func BuildMetaDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
+	// Build SSL mode
+	sslMode := project.Spec.Database.SSLMode
+	if sslMode == "" {
+		sslMode = "require"
+	}
+
+	env := []corev1.EnvVar{
+		{
+			Name: "PG_META_DB_HOST",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "host",
+				},
+			},
+		},
+		{
+			Name: "PG_META_DB_PORT",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "port",
+				},
+			},
+		},
+		{
+			Name: "PG_META_DB_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "database",
+				},
+			},
+		},
+		{
+			Name: "PG_META_DB_USER",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "username",
+				},
+			},
+		},
+		{
+			Name: "PG_META_DB_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "password",
+				},
+			},
+		},
+		{
+			Name:  "PG_META_DB_SSL_MODE",
+			Value: sslMode,
+		},
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      project.Name + "-meta",
@@ -54,6 +122,7 @@ func BuildMetaDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 							Name:      "meta",
 							Image:     image,
 							Resources: resources,
+							Env:       env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",

@@ -49,6 +49,10 @@ func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 			Value: "http://localhost:8000",
 		},
 		{
+			Name:  "GOTRUE_API_PORT",
+			Value: "9999",
+		},
+		{
 			Name:  "GOTRUE_DB_DRIVER",
 			Value: "postgres",
 		},
