@@ -4,11 +4,19 @@
 package e2e
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
+	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/chromedp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -154,15 +162,15 @@ var _ = Describe("Manager", Ordered, func() {
 
 			By("creating storage secret")
 			createSecret(testNamespace, storageSecretName, map[string]string{
-				"endpoint":   "s3.amazonaws.com",
-				"region":     "us-east-1",
-				"bucket":     "test-bucket",
+				"endpoint":        "s3.amazonaws.com",
+				"region":          "us-east-1",
+				"bucket":          "test-bucket",
 				"accessKeyId":     "test-access-key",
 				"secretAccessKey": "test-secret-key",
 			})
 		})
 
-		AfterEach(func() {
+		AfterAll(func() {
 			By("cleaning up SupabaseProject")
 			cmd := exec.Command("kubectl", "delete", "supabaseproject", projectName, "-n", testNamespace, "--ignore-not-found=true")
 			_, _ = utils.Run(cmd)
@@ -372,6 +380,112 @@ spec:
 			}
 			Eventually(verifyObservedGeneration, 2*time.Minute).Should(Succeed())
 		})
+
+		It("should capture Kong Studio screenshot via Basic Auth (T107)", func() {
+			const (
+				localStudioPort = 18080
+				studioUser      = "supabase"
+				studioPassword  = "this_password_is_insecure_and_should_be_updated"
+			)
+
+			By("creating a SupabaseProject CR")
+			createSupabaseProject(testNamespace, projectName, dbSecretName, storageSecretName)
+
+			By("waiting for SupabaseProject to reach Running phase")
+			verifyRunning := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "supabaseproject", projectName, "-n", testNamespace,
+					"-o", "jsonpath={.status.phase}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("Running"))
+			}
+			Eventually(verifyRunning, 3*time.Minute).Should(Succeed())
+
+			By("waiting for Kong pod to report Ready")
+			var kongPodName string
+			Eventually(func() error {
+				cmd := exec.Command("kubectl", "get", "pods",
+					"-l", fmt.Sprintf("app.kubernetes.io/instance=%s", projectName),
+					"-l", "app.kubernetes.io/name=kong",
+					"-n", testNamespace,
+					"-o", "json")
+				output, err := utils.Run(cmd)
+				if err != nil {
+					return err
+				}
+				var podList struct {
+					Items []struct {
+						Metadata struct {
+							Name string `json:"name"`
+						} `json:"metadata"`
+						Status struct {
+							ContainerStatuses []struct {
+								Ready bool `json:"ready"`
+							} `json:"containerStatuses"`
+						} `json:"status"`
+					} `json:"items"`
+				}
+				if err := json.Unmarshal([]byte(output), &podList); err != nil {
+					return err
+				}
+				for _, item := range podList.Items {
+					ready := false
+					for _, cs := range item.Status.ContainerStatuses {
+						if cs.Ready {
+							ready = true
+							break
+						}
+					}
+					if ready {
+						kongPodName = item.Metadata.Name
+						return nil
+					}
+				}
+				return fmt.Errorf("kong pod not ready yet")
+			}, 4*time.Minute, 2*time.Second).Should(Succeed())
+
+			By("port-forwarding the Kong pod to localhost")
+			portForwardCmd, err := startPortForward(testNamespace, fmt.Sprintf("pod/%s", kongPodName), localStudioPort, 8000)
+			Expect(err).NotTo(HaveOccurred())
+			defer stopPortForward(portForwardCmd)
+
+			targetURL := fmt.Sprintf("http://127.0.0.1:%d/project/default", localStudioPort)
+			client := &http.Client{Timeout: 5 * time.Second}
+			Eventually(func() error {
+				req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
+					targetURL, nil)
+				if err != nil {
+					return err
+				}
+				req.SetBasicAuth(studioUser, studioPassword)
+				resp, err := client.Do(req)
+				if err != nil {
+					return err
+				}
+				defer resp.Body.Close()
+				if resp.StatusCode != http.StatusOK {
+					return fmt.Errorf("unexpected status %d", resp.StatusCode)
+				}
+				return nil
+			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+
+			chromePath, err := utils.FindChromeBinary()
+			if err != nil {
+				Skip(fmt.Sprintf("headless chrome not available: %v", err))
+			}
+
+			By("capturing the Kong Studio page screenshot")
+			timestamp := time.Now().Format("20060102-150405")
+			screenshotPath := filepath.Join(".artifacts", "screenshots", fmt.Sprintf("kong-studio-%s.png", timestamp))
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			err = captureStudioScreenshot(ctx, chromePath,
+				targetURL,
+				studioUser, studioPassword, screenshotPath)
+			Expect(err).NotTo(HaveOccurred())
+			_, _ = fmt.Fprintf(GinkgoWriter, "Studio screenshot saved to %s\n", screenshotPath)
+		})
 	})
 })
 
@@ -431,4 +545,129 @@ func applyManifest(manifest string) {
 	cmd := exec.Command("kubectl", "apply", "-f", tmpFile.Name())
 	_, err = utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred())
+}
+
+func startPortForward(namespace, resource string, localPort, remotePort int) (*exec.Cmd, error) {
+	cmd := exec.Command("kubectl", "port-forward",
+		resource,
+		fmt.Sprintf("%d:%d", localPort, remotePort),
+		"-n", namespace,
+	)
+	cmd.Stdout = GinkgoWriter
+	cmd.Stderr = GinkgoWriter
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", localPort), 500*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			stopPortForward(cmd)
+			return nil, fmt.Errorf("port-forward did not become ready: %w", err)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	return cmd, nil
+}
+
+func stopPortForward(cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	_ = cmd.Process.Signal(os.Interrupt)
+	done := make(chan struct{})
+	go func() {
+		_, _ = fmt.Fprintf(GinkgoWriter, "Waiting for port-forward to exit...\n")
+		_ = cmd.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_, _ = fmt.Fprintf(GinkgoWriter, "Port-forward did not exit gracefully, killing...\n")
+		_ = cmd.Process.Kill()
+		<-done
+	}
+}
+
+func captureStudioScreenshot(ctx context.Context, chromePath, url, username, password, outputPath string) error {
+	authHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
+	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(chromePath),
+		chromedp.NoFirstRun,
+		chromedp.NoDefaultBrowserCheck,
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("single-process", true),
+		chromedp.Flag("hide-scrollbars", true),
+		chromedp.Flag("window-size", "1280,720"),
+		chromedp.Flag("remote-allow-origins", "*"),
+	)
+
+	var (
+		screenshot []byte
+		lastErr    error
+	)
+
+	const maxAttempts = 3
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		attemptAllocatorCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocOpts...)
+		attemptCtx, cancelTimeout := context.WithTimeout(attemptAllocatorCtx, 5*time.Minute)
+
+		browserCtx, cancelCtx := chromedp.NewContext(
+			attemptCtx,
+			chromedp.WithLogf(func(format string, a ...any) {
+				_, _ = fmt.Fprintf(GinkgoWriter, "[chromedp] "+format+"\n", a...)
+			}),
+		)
+
+		var attemptScreenshot []byte
+		tasks := chromedp.Tasks{
+			network.Enable(),
+			network.SetExtraHTTPHeaders(network.Headers(map[string]interface{}{
+				"Authorization": authHeader,
+			})),
+			chromedp.Navigate(url),
+			chromedp.WaitReady("body", chromedp.ByQuery),
+			chromedp.Sleep(2 * time.Second),
+			chromedp.CaptureScreenshot(&attemptScreenshot),
+		}
+
+		runErr := chromedp.Run(browserCtx, tasks)
+		cancelCtx()
+		cancelTimeout()
+		cancelAlloc()
+
+		if runErr == nil {
+			screenshot = attemptScreenshot
+			lastErr = nil
+			break
+		}
+
+		lastErr = runErr
+		_, _ = fmt.Fprintf(GinkgoWriter, "chromedp attempt %d failed: %v\n", attempt, runErr)
+
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("capture studio screenshot failed after %d attempts: %w", maxAttempts, lastErr)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(outputPath, screenshot, 0o644)
 }

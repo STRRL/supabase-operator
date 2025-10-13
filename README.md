@@ -413,3 +413,17 @@ MIT
 - [ ] v1: Production-ready with stability guarantees
 
 See [future-considerations.md](specs/001-selfhost-supabase-operator/future-considerations.md) for planned features.
+
+## End-to-End Tests
+
+The e2e suite spins up a temporary [Minikube](https://minikube.sigs.k8s.io/) profile, deploys the operator, and exercises a SupabaseProject end-to-end (including capturing a Kong Studio screenshot via headless Chrome).
+
+- Install Minikube (`minikube version` should succeed) and ensure Docker is available.
+- Install Google Chrome or Chromium locally, or set `E2E_CHROME_PATH` to a compatible executable. If Chrome is missing, the screenshot spec is skipped.
+- Run:
+
+  ```bash
+  MINIKUBE_START_ARGS="--driver=docker --cpus=4 --memory=8192 --wait=all" make test-e2e
+  ```
+
+  This command creates the `supabase-operator-test-e2e` Minikube profile, runs `go test -tags=e2e`, saves screenshots to `.artifacts/screenshots/`, and tears the profile down afterwards.
