@@ -15,8 +15,8 @@ const (
 	certmanagerVersion = "v1.18.2"
 	certmanagerURLTmpl = "https://github.com/cert-manager/cert-manager/releases/download/%s/cert-manager.yaml"
 
-	defaultKindBinary  = "kind"
-	defaultKindCluster = "kind"
+	defaultMinikubeBinary  = "minikube"
+	defaultMinikubeProfile = "minikube"
 )
 
 func warnError(err error) {
@@ -117,18 +117,17 @@ func IsCertManagerCRDsInstalled() bool {
 	return false
 }
 
-// LoadImageToKindClusterWithName loads a local docker image to the kind cluster
-func LoadImageToKindClusterWithName(name string) error {
-	cluster := defaultKindCluster
-	if v, ok := os.LookupEnv("KIND_CLUSTER"); ok {
-		cluster = v
+// LoadImageToMinikubeProfile loads a local docker image into the configured Minikube profile.
+func LoadImageToMinikubeProfile(name string) error {
+	profile := defaultMinikubeProfile
+	if v, ok := os.LookupEnv("MINIKUBE_PROFILE"); ok {
+		profile = v
 	}
-	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
-	kindBinary := defaultKindBinary
-	if v, ok := os.LookupEnv("KIND"); ok {
-		kindBinary = v
+	minikubeBinary := defaultMinikubeBinary
+	if v, ok := os.LookupEnv("MINIKUBE"); ok {
+		minikubeBinary = v
 	}
-	cmd := exec.Command(kindBinary, kindOptions...)
+	cmd := exec.Command(minikubeBinary, "image", "load", name, "-p", profile)
 	_, err := Run(cmd)
 	return err
 }
@@ -207,4 +206,34 @@ func UncommentCode(filename, target, prefix string) error {
 	}
 
 	return nil
+}
+
+// FindChromeBinary tries to locate a Chrome/Chromium binary to be used by headless browser tests.
+func FindChromeBinary() (string, error) {
+	if explicit := os.Getenv("E2E_CHROME_PATH"); explicit != "" {
+		if _, err := os.Stat(explicit); err == nil {
+			return explicit, nil
+		}
+		return "", fmt.Errorf("chrome binary not found at %s", explicit)
+	}
+
+	candidates := []string{
+		"chromium-browser",
+		"chromium",
+		"google-chrome",
+		"google-chrome-stable",
+		"google-chrome-beta",
+		"google-chrome-unstable",
+		"chrome",
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+	}
+
+	for _, candidate := range candidates {
+		if path, err := exec.LookPath(candidate); err == nil {
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("unable to locate a Chrome/Chromium binary; tried %v", candidates)
 }

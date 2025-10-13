@@ -62,33 +62,40 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
-# The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
+# The default setup assumes Minikube is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
-KIND_CLUSTER ?= supabase-operator-test-e2e
+MINIKUBE ?= minikube
+MINIKUBE_PROFILE ?= supabase-operator-test-e2e
+MINIKUBE_START_ARGS ?= --driver=docker
 
 .PHONY: setup-test-e2e
-setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
-	@command -v $(KIND) >/dev/null 2>&1 || { \
-		echo "Kind is not installed. Please install Kind manually."; \
+setup-test-e2e: ## Set up a Minikube profile for e2e tests if it does not exist
+	@command -v $(MINIKUBE) >/dev/null 2>&1 || { \
+		echo "Minikube is not installed. Please install Minikube manually."; \
 		exit 1; \
 	}
-	@case "$$($(KIND) get clusters)" in \
-		*"$(KIND_CLUSTER)"*) \
-			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
-		*) \
-			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
-	esac
+	@mkdir -p $(LOCALBIN)
+	@if ! $(MINIKUBE) status -p $(MINIKUBE_PROFILE) >/dev/null 2>&1; then \
+		echo "Starting Minikube profile '$(MINIKUBE_PROFILE)'..."; \
+		$(MINIKUBE) start -p $(MINIKUBE_PROFILE) $(MINIKUBE_START_ARGS); \
+	else \
+		echo "Minikube profile '$(MINIKUBE_PROFILE)' already running. Skipping start."; \
+	fi
+	@$(MINIKUBE) update-context -p $(MINIKUBE_PROFILE)
+	@$(MINIKUBE) -p $(MINIKUBE_PROFILE) kubectl -- config view --raw > $(LOCALBIN)/$(MINIKUBE_PROFILE)-kubeconfig
+	@echo "Kubeconfig written to $(LOCALBIN)/$(MINIKUBE_PROFILE)-kubeconfig"
 
 .PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests against a Minikube profile.
+	MINIKUBE=$(MINIKUBE) MINIKUBE_PROFILE=$(MINIKUBE_PROFILE) KUBECONFIG=$(LOCALBIN)/$(MINIKUBE_PROFILE)-kubeconfig go test -tags=e2e ./test/e2e/ -v -ginkgo.v
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: cleanup-test-e2e
-cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
-	@$(KIND) delete cluster --name $(KIND_CLUSTER)
+cleanup-test-e2e: ## Tear down the Minikube profile used for e2e tests
+	@echo "Deleting Minikube profile '$(MINIKUBE_PROFILE)'..."
+	@$(MINIKUBE) delete -p $(MINIKUBE_PROFILE) >/dev/null 2>&1 || true
+	@rm -f $(LOCALBIN)/$(MINIKUBE_PROFILE)-kubeconfig
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -180,7 +187,6 @@ $(LOCALBIN):
 
 ## Tool Binaries
 KUBECTL ?= kubectl
-KIND ?= kind
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest

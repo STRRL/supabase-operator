@@ -2,7 +2,7 @@
 
 **Purpose:** Step-by-step guide for manually testing the Supabase Operator MVP to validate core functionality.
 
-**Last Updated:** 2025-10-11
+**Last Updated:** 2025-10-13
 
 ---
 
@@ -15,6 +15,7 @@
 - [x] `minikube` (v1.30+) or similar Kubernetes cluster
 - [x] `make` (for building)
 - [x] `curl` (for API testing)
+- [x] `google-chrome` or `chromium` (headless) for capturing Kong Studio screenshots
 
 ### Environment Setup
 
@@ -540,7 +541,30 @@ wscat -c "ws://localhost:8000/realtime/v1/websocket?apikey=$ANON_KEY&vsn=1.0.0"
 # Should receive a response
 ```
 
-#### Step 4.8: Test Meta (Database Management)
+#### Step 4.8: Capture Kong Studio Screenshot
+
+```bash
+# Create screenshots directory if it does not exist
+mkdir -p .artifacts/screenshots
+
+# Capture Kong Studio landing page via headless Chrome with basic auth
+STAMP=$(date +%Y%m%d-%H%M%S)
+OUT=.artifacts/screenshots/kong-studio-manual-$STAMP.png
+google-chrome --headless --disable-gpu --window-size=1280,720 \
+  --user-data-dir=$(mktemp -d) \
+  --screenshot="$OUT" \
+  "http://$DASHBOARD_USER:$DASHBOARD_PASSWORD@localhost:8000/"
+
+# Verify screenshot was created (size should be > 0)
+ls -lh "$OUT"
+```
+
+**Success Criteria:**
+- Command exits 0
+- Screenshot file exists and is non-empty
+- Image shows Supabase Studio login page (open manually to confirm)
+
+#### Step 4.9: Test Meta (Database Management)
 
 ```bash
 # Test Meta health
@@ -563,7 +587,7 @@ curl http://localhost:8000/pg/tables \
 - Can list tables
 - Database introspection working
 
-#### Step 4.9: Cleanup Port Forward
+#### Step 4.10: Cleanup Port Forward
 
 ```bash
 # Kill port forward process
@@ -683,12 +707,31 @@ kubectl top pods -n test-supabase
    - [ ] PostgREST: Can CRUD data
    - [ ] Storage: Can create/list buckets
    - [ ] Realtime: Service is accessible
+   - [ ] Kong Studio: Screenshot captured and stored
    - [ ] Meta: Can introspect database
 
 5. **Status Reporting:**
    - [ ] SupabaseProject phase is "Running"
    - [ ] All components report as ready
    - [ ] Conditions show healthy state
+
+---
+
+### Optional: Automated E2E Verification
+
+After completing the manual walkthrough, you can double-check the environment by running the automated e2e suite against a fresh Minikube profile:
+
+```bash
+MINIKUBE_START_ARGS="--driver=docker --cpus=4 --memory=8192 --wait=all" make test-e2e
+```
+
+The suite:
+
+- Builds the operator image and loads it into Minikube
+- Exercises the SupabaseProject end-to-end, including the Kong Studio screenshot
+- Cleans up the `supabase-operator-test-e2e` Minikube profile afterwards
+
+Inspect the Ginkgo output for failures, and retrieve screenshots/logs from `.artifacts/screenshots/` if troubleshooting is required.
 
 ---
 
@@ -814,6 +857,7 @@ Print and use this checklist during manual testing:
     [ ] PostgREST CRUD works
     [ ] Storage bucket operations work
     [ ] Realtime accessible
+    [ ] Kong Studio screenshot captured
     [ ] Meta API works
 
 [ ] Phase 5: Status

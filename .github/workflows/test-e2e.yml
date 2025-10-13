@@ -19,16 +19,27 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install the latest version of kind
-        run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+      - name: Setup Minikube
+        uses: medyagh/setup-minikube@v0.0.20
+        with:
+          driver: docker
+          kubernetes-version: v1.31.1
+          cpus: 4
+          memory: 8192m
+          wait: all
 
-      - name: Verify kind installation
-        run: kind version
+      - name: Install Google Chrome for headless tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-linux-signing-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
 
       - name: Running Test e2e
+        env:
+          MINIKUBE_PROFILE: minikube
         run: |
           go mod tidy
           make test-e2e
