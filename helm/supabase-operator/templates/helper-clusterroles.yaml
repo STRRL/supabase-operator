@@ -1,0 +1,69 @@
+{{- if .Values.rbac.createHelperClusterRoles }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-supabaseproject-admin" (include "supabase-operator.fullname" .) }}
+  labels:
+    {{- include "supabase-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - supabase.strrl.dev
+    resources:
+      - supabaseprojects
+    verbs:
+      - '*'
+  - apiGroups:
+      - supabase.strrl.dev
+    resources:
+      - supabaseprojects/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-supabaseproject-editor" (include "supabase-operator.fullname" .) }}
+  labels:
+    {{- include "supabase-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - supabase.strrl.dev
+    resources:
+      - supabaseprojects
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - supabase.strrl.dev
+    resources:
+      - supabaseprojects/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-supabaseproject-viewer" (include "supabase-operator.fullname" .) }}
+  labels:
+    {{- include "supabase-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - supabase.strrl.dev
+    resources:
+      - supabaseprojects
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - supabase.strrl.dev
+    resources:
+      - supabaseprojects/status
+    verbs:
+      - get
+{{- end }}

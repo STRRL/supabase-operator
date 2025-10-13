@@ -1,5 +1,6 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+IMAGE_TAG ?=
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -132,6 +133,14 @@ docker-build: ## Build docker image with the manager.
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
+
+.PHONY: image
+image: ## Build the controller image using hack/build-image.sh.
+	@if [ -n "$(IMAGE_TAG)" ]; then \
+		IMAGE_TAG=$(IMAGE_TAG) bash ./hack/build-image.sh; \
+	else \
+		bash ./hack/build-image.sh; \
+	fi
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:

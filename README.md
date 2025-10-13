@@ -52,6 +52,39 @@ make install
 make deploy
 ```
 
+### Build Container Image
+
+The repo provides an opinionated build that mirrors the pattern used in [`STRRL/cloudflare-tunnel-ingress-controller`](https://github.com/STRRL/cloudflare-tunnel-ingress-controller). Build it with BuildKit enabled so module downloads are cached automatically:
+
+```bash
+make image
+```
+
+The helper tags the result as `ghcr.io/strrl/supabase-operator:<commit>`, `<commit>-linux-amd64`, and `latest`. Provide an extra tag if needed:
+
+```bash
+IMAGE_TAG=v0.1.0 make image
+```
+
+### Deploy with Helm
+
+A self-contained Helm chart lives in `helm/supabase-operator`, including the CRD. Render or install it directly:
+
+```bash
+# Render the manifests for review
+helm template supabase-operator ./helm/supabase-operator \
+  --namespace supabase-operator-system
+
+# Or install into a cluster
+helm install supabase-operator ./helm/supabase-operator \
+  --namespace supabase-operator-system \
+  --create-namespace \
+  --set image.repository=ghcr.io/strrl/supabase-operator \
+  --set image.tag=$(git rev-parse --short HEAD)
+```
+
+Pass additional overrides (for example `.Values.extraArgs` or `.Values.resources`) to tailor the deployment.
+
 ## Quick Start
 
 ### 1. Create Database Secret

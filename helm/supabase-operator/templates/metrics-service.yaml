@@ -1,0 +1,20 @@
+{{- if .Values.metricsService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-metrics" (include "supabase-operator.fullname" .) }}
+  labels:
+    {{- include "supabase-operator.labels" . | nindent 4 }}
+  {{- with .Values.metricsService.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ports:
+    - name: https
+      port: {{ .Values.metricsService.port }}
+      protocol: TCP
+      targetPort: {{ .Values.metricsService.port }}
+  selector:
+    {{- include "supabase-operator.selectorLabels" . | nindent 4 }}
+{{- end }}
