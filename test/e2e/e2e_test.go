@@ -170,7 +170,7 @@ var _ = Describe("Manager", Ordered, func() {
 			})
 		})
 
-		AfterEach(func() {
+		AfterAll(func() {
 			By("cleaning up SupabaseProject")
 			cmd := exec.Command("kubectl", "delete", "supabaseproject", projectName, "-n", testNamespace, "--ignore-not-found=true")
 			_, _ = utils.Run(cmd)
