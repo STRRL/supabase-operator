@@ -192,6 +192,7 @@ kubectl get secrets -n test-supabase
 **Expected Secrets:**
 - `test-db-creds` - PostgreSQL credentials
 - `test-storage-creds` - MinIO credentials
+- `test-dashboard-creds` - Kong basic-auth credentials for Studio
 
 **Verify Secret Contents:**
 
@@ -203,6 +204,10 @@ kubectl get secret test-db-creds -n test-supabase -o jsonpath='{.data}' | jq 'ke
 # Check storage secret has required keys
 kubectl get secret test-storage-creds -n test-supabase -o jsonpath='{.data}' | jq 'keys'
 # Expected: ["accessKeyId", "bucket", "endpoint", "region", "secretAccessKey"]
+
+# Check dashboard secret has required keys
+kubectl get secret test-dashboard-creds -n test-supabase -o jsonpath='{.data}' | jq 'keys'
+# Expected: ["password", "username"]
 ```
 
 #### Step 3.2: Create SupabaseProject
@@ -357,12 +362,15 @@ done
 #### Step 4.1: Get API Keys
 
 ```bash
-# Extract API keys
+# Extract API keys and dashboard credentials
 export ANON_KEY=$(kubectl get secret test-project-jwt -n test-supabase -o jsonpath='{.data.anon-key}' | base64 -d)
 export SERVICE_ROLE_KEY=$(kubectl get secret test-project-jwt -n test-supabase -o jsonpath='{.data.service-role-key}' | base64 -d)
+export DASHBOARD_USER=$(kubectl get secret test-dashboard-creds -n test-supabase -o jsonpath='{.data.username}' | base64 -d)
+export DASHBOARD_PASSWORD=$(kubectl get secret test-dashboard-creds -n test-supabase -o jsonpath='{.data.password}' | base64 -d)
 
 echo "ANON_KEY: $ANON_KEY"
 echo "SERVICE_ROLE_KEY: $SERVICE_ROLE_KEY"
+echo "DASHBOARD_USER: $DASHBOARD_USER"
 ```
 
 #### Step 4.2: Setup Port Forwarding
@@ -379,9 +387,12 @@ sleep 3
 #### Step 4.3: Test Health Endpoints
 
 ```bash
-# Test Kong health
+# Test Kong root without credentials (should be blocked)
 curl -i http://localhost:8000/
+# Expected: HTTP 401 Unauthorized (dashboard basic-auth enforced)
 
+# Test Kong root with credentials (basic-auth satisfied)
+curl -i -u "$DASHBOARD_USER:$DASHBOARD_PASSWORD" http://localhost:8000/
 # Expected: HTTP 404 (Kong is running, no route matched)
 # Should NOT get connection refused
 ```

@@ -1,6 +1,9 @@
 package resources
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/strrl/supabase-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -33,6 +36,9 @@ func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
+	plugins := "request-transformer,cors,key-auth,acl,basic-auth"
+	declConfigPath := "/tmp/kong.yml"
+
 	env := []corev1.EnvVar{
 		{
 			Name:  "KONG_DATABASE",
@@ -40,7 +46,7 @@ func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		},
 		{
 			Name:  "KONG_DECLARATIVE_CONFIG",
-			Value: "/etc/kong/kong.yml",
+			Value: declConfigPath,
 		},
 		{
 			Name:  "KONG_PROXY_ACCESS_LOG",
@@ -68,9 +74,55 @@ func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		},
 		{
 			Name:  "KONG_PLUGINS",
-			Value: "request-transformer,cors,key-auth,acl",
+			Value: plugins,
 		},
 	}
+
+	env = append(env,
+		corev1.EnvVar{
+			Name: "SUPABASE_ANON_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: project.Name + "-jwt"},
+					Key:                  "anon-key",
+				},
+			},
+		},
+		corev1.EnvVar{
+			Name: "SUPABASE_SERVICE_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: project.Name + "-jwt"},
+					Key:                  "service-role-key",
+				},
+			},
+		},
+	)
+
+	usernameEnv := corev1.EnvVar{Name: "DASHBOARD_USERNAME", Value: "supabase"}
+	passwordEnv := corev1.EnvVar{Name: "DASHBOARD_PASSWORD", Value: "this_password_is_insecure_and_should_be_updated"}
+	if project.Spec.Studio != nil && project.Spec.Studio.DashboardBasicAuthSecretRef != nil {
+		secretRef := project.Spec.Studio.DashboardBasicAuthSecretRef
+		usernameEnv = corev1.EnvVar{
+			Name: "DASHBOARD_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: secretRef.Name},
+					Key:                  "username",
+				},
+			},
+		}
+		passwordEnv = corev1.EnvVar{
+			Name: "DASHBOARD_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: secretRef.Name},
+					Key:                  "password",
+				},
+			},
+		}
+	}
+	env = append(env, usernameEnv, passwordEnv)
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -137,6 +189,12 @@ func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		},
 	}
 
+	deployment.Spec.Template.Spec.Containers[0].Command = []string{
+		"bash",
+		"-lc",
+		"eval \"echo \\\"$$(cat /etc/kong/kong.yml)\\\"\" > /tmp/kong.yml && export KONG_DECLARATIVE_CONFIG=/tmp/kong.yml && /docker-entrypoint.sh kong docker-start",
+	}
+
 	if project.Spec.Kong != nil && len(project.Spec.Kong.ExtraEnv) > 0 {
 		deployment.Spec.Template.Spec.Containers[0].Env = append(
 			deployment.Spec.Template.Spec.Containers[0].Env,
@@ -156,11 +214,35 @@ func BuildKongConfigMap(project *v1alpha1.SupabaseProject) *corev1.ConfigMap {
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
-	kongConfig := `_format_version: "1.1"
+	var builder strings.Builder
+	builder.WriteString(`_format_version: '2.1'
+_transform: true
+
+consumers:
+  - username: DASHBOARD
+  - username: anon
+    keyauth_credentials:
+      - key: $SUPABASE_ANON_KEY
+  - username: service_role
+    keyauth_credentials:
+      - key: $SUPABASE_SERVICE_KEY
+
+acls:
+  - consumer: anon
+    group: anon
+  - consumer: service_role
+    group: admin
+
+basicauth_credentials:
+  - consumer: DASHBOARD
+    username: $DASHBOARD_USERNAME
+    password: $DASHBOARD_PASSWORD
 
 services:
-  - name: auth-v1-open
-    url: http://` + project.Name + `-auth:9999/verify
+`)
+
+	builder.WriteString(fmt.Sprintf(`  - name: auth-v1-open
+    url: http://%s-auth:9999/verify
     routes:
       - name: auth-v1-open
         strip_path: true
@@ -169,8 +251,9 @@ services:
     plugins:
       - name: cors
 
-  - name: auth-v1-open-callback
-    url: http://` + project.Name + `-auth:9999/callback
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: auth-v1-open-callback
+    url: http://%s-auth:9999/callback
     routes:
       - name: auth-v1-open-callback
         strip_path: true
@@ -179,8 +262,9 @@ services:
     plugins:
       - name: cors
 
-  - name: auth-v1-open-authorize
-    url: http://` + project.Name + `-auth:9999/authorize
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: auth-v1-open-authorize
+    url: http://%s-auth:9999/authorize
     routes:
       - name: auth-v1-open-authorize
         strip_path: true
@@ -189,8 +273,9 @@ services:
     plugins:
       - name: cors
 
-  - name: auth-v1
-    url: http://` + project.Name + `-auth:9999/
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: auth-v1
+    url: http://%s-auth:9999/
     routes:
       - name: auth-v1-all
         strip_path: true
@@ -198,9 +283,19 @@ services:
           - /auth/v1/
     plugins:
       - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
 
-  - name: rest-v1
-    url: http://` + project.Name + `-postgrest:3000/
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: rest-v1
+    url: http://%s-postgrest:3000/
     routes:
       - name: rest-v1-all
         strip_path: true
@@ -208,19 +303,85 @@ services:
           - /rest/v1/
     plugins:
       - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: true
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
 
-  - name: realtime-v1
-    url: http://` + project.Name + `-realtime:4000/socket/
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: graphql-v1
+    url: http://%s-postgrest:3000/rpc/graphql
     routes:
-      - name: realtime-v1-all
+      - name: graphql-v1-all
+        strip_path: true
+        paths:
+          - /graphql/v1
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: true
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - Content-Profile:graphql_public
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: realtime-v1-ws
+    url: http://%s-realtime:4000/socket
+    protocol: ws
+    routes:
+      - name: realtime-v1-ws
         strip_path: true
         paths:
           - /realtime/v1/
     plugins:
       - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
 
-  - name: storage-v1
-    url: http://` + project.Name + `-storage:5000/
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: realtime-v1-rest
+    url: http://%s-realtime:4000/api
+    routes:
+      - name: realtime-v1-rest
+        strip_path: true
+        paths:
+          - /realtime/v1/api
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: storage-v1
+    url: http://%s-storage:5000/
     routes:
       - name: storage-v1-all
         strip_path: true
@@ -229,16 +390,40 @@ services:
     plugins:
       - name: cors
 
-  - name: meta-v1
-    url: http://` + project.Name + `-meta:8080/
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: meta
+    url: http://%s-meta:8080/
     routes:
-      - name: meta-v1-all
+      - name: meta-all
         strip_path: true
         paths:
           - /pg/
     plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+
+`, project.Name))
+	builder.WriteString(fmt.Sprintf(`  - name: dashboard
+    url: http://%s-studio:3000/
+    routes:
+      - name: dashboard-all
+        strip_path: true
+        paths:
+          - /
+    plugins:
       - name: cors
-`
+      - name: basic-auth
+        config:
+          hide_credentials: true
+`, project.Name))
+
+	kongConfig := builder.String()
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -246,9 +431,7 @@ services:
 			Namespace: project.Namespace,
 			Labels:    labels,
 		},
-		Data: map[string]string{
-			"kong.yml": kongConfig,
-		},
+		Data: map[string]string{"kong.yml": kongConfig},
 	}
 }
 

@@ -1529,6 +1529,23 @@ spec:
                 type: object
               studio:
                 properties:
+                  dashboardBasicAuthSecretRef:
+                    description: |-
+                      DashboardBasicAuthSecretRef references a Secret containing username/password
+                      used to protect the Supabase Studio route behind Kong basic-auth. The Secret
+                      must define the keys "username" and "password". When provided, Kong will
+                      render the dashboard route with basic-auth enabled.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
                   extraEnv:
                     items:
                       description: EnvVar represents an environment variable present

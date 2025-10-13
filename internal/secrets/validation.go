@@ -29,3 +29,15 @@ func ValidateStorageSecret(secret *corev1.Secret) error {
 
 	return nil
 }
+
+func ValidateBasicAuthSecret(secret *corev1.Secret) error {
+	requiredKeys := []string{"username", "password"}
+
+	for _, key := range requiredKeys {
+		if _, ok := secret.Data[key]; !ok {
+			return fmt.Errorf("missing required key '%s'", key)
+		}
+	}
+
+	return nil
+}

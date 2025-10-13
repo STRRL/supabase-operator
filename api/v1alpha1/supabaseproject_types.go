@@ -216,6 +216,13 @@ type StudioConfig struct {
 
 	// +optional
 	PublicURL string `json:"publicUrl,omitempty"`
+
+	// DashboardBasicAuthSecretRef references a Secret containing username/password
+	// used to protect the Supabase Studio route behind Kong basic-auth. The Secret
+	// must define the keys "username" and "password". When provided, Kong will
+	// render the dashboard route with basic-auth enabled.
+	// +optional
+	DashboardBasicAuthSecretRef *corev1.SecretReference `json:"dashboardBasicAuthSecretRef,omitempty"`
 }
 
 type IngressConfig struct {

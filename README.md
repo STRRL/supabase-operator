@@ -78,7 +78,17 @@ kubectl create secret generic s3-config \
 
 > **Note:** Use camelCase for secret keys: `accessKeyId` and `secretAccessKey` (not kebab-case)
 
-### 3. Deploy SupabaseProject
+### 3. Create Studio Dashboard Secret
+
+```bash
+kubectl create secret generic studio-dashboard-creds \
+  --from-literal=username=supabase \
+  --from-literal=password='choose-a-strong-password'
+```
+
+> Change these credentials before exposing Kong publicly.
+
+### 4. Deploy SupabaseProject
 
 ```yaml
 apiVersion: supabase.strrl.dev/v1alpha1
@@ -99,6 +109,9 @@ spec:
     secretRef:
       name: s3-config
     forcePathStyle: true
+  studio:
+    dashboardBasicAuthSecretRef:
+      name: studio-dashboard-creds
 ```
 
 Apply the manifest:
@@ -107,7 +120,7 @@ Apply the manifest:
 kubectl apply -f my-supabase.yaml
 ```
 
-### 4. Check Status
+### 5. Check Status
 
 ```bash
 kubectl get supabaseproject my-supabase -o yaml
@@ -119,7 +132,7 @@ Check component status:
 kubectl get supabaseproject my-supabase -o jsonpath='{.status.components}'
 ```
 
-### 5. Access Services
+### 6. Access Services
 
 The operator creates services for each component:
 
@@ -133,18 +146,20 @@ Access Kong API Gateway:
 kubectl port-forward svc/my-supabase-kong 8000:8000
 ```
 
-### 6. Retrieve Supabase API Keys
+Requests to `http://localhost:8000/` will answer `401 Unauthorized` until you supply the username/password stored in `studio-dashboard-creds`.
+
+### 7. Retrieve Supabase API Keys
 
 The operator generates API keys and stores them in a secret named `<project>-jwt` within the same namespace as your `SupabaseProject`.
 
 ```bash
 # Get the public ANON key
 ANON_KEY=$(kubectl get secret my-supabase-jwt \
-  -o jsonpath='{.data.ANON_KEY}' | base64 -d)
+  -o jsonpath='{.data.anon-key}' | base64 -d)
 
 # Get the Service Role key
 SERVICE_ROLE_KEY=$(kubectl get secret my-supabase-jwt \
-  -o jsonpath='{.data.SERVICE_ROLE_KEY}' | base64 -d)
+  -o jsonpath='{.data.service-role-key}' | base64 -d)
 
 # Optional: discover the API endpoint
 API_URL=$(kubectl get supabaseproject my-supabase \
@@ -153,7 +168,7 @@ API_URL=$(kubectl get supabaseproject my-supabase \
 
 Use `$ANON_KEY` for client-side requests and `$SERVICE_ROLE_KEY` for trusted backend workflows.
 
-### 7. Connect to Your Database
+### 8. Connect to Your Database
 
 Supabase components use the external PostgreSQL database you referenced via `postgres-config`. You can reuse the same credentials to connect with tools like `psql`.
 

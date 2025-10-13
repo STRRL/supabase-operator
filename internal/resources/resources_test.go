@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/strrl/supabase-operator/api/v1alpha1"
@@ -100,6 +101,74 @@ func TestBuildKongService(t *testing.T) {
 
 	if len(service.Spec.Ports) != 2 {
 		t.Errorf("Expected 2 ports, got %d", len(service.Spec.Ports))
+	}
+}
+
+func TestBuildKongWithDashboardBasicAuth(t *testing.T) {
+	project := &v1alpha1.SupabaseProject{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-project",
+			Namespace: "default",
+		},
+		Spec: v1alpha1.SupabaseProjectSpec{
+			ProjectID: "test",
+			Studio: &v1alpha1.StudioConfig{
+				DashboardBasicAuthSecretRef: &corev1.SecretReference{Name: "dashboard-creds"},
+			},
+		},
+	}
+
+	deployment := BuildKongDeployment(project)
+	container := deployment.Spec.Template.Spec.Containers[0]
+
+	var pluginValue string
+	var hasUsernameEnv, hasPasswordEnv bool
+	var hasAnonKeyEnv, hasServiceKeyEnv bool
+	for _, env := range container.Env {
+		switch env.Name {
+		case "KONG_PLUGINS":
+			pluginValue = env.Value
+		case "DASHBOARD_USERNAME":
+			hasUsernameEnv = env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil && env.ValueFrom.SecretKeyRef.Key == "username"
+		case "DASHBOARD_PASSWORD":
+			hasPasswordEnv = env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil && env.ValueFrom.SecretKeyRef.Key == "password"
+		case "SUPABASE_ANON_KEY":
+			hasAnonKeyEnv = env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil && env.ValueFrom.SecretKeyRef.Key == "anon-key"
+		case "SUPABASE_SERVICE_KEY":
+			hasServiceKeyEnv = env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil && env.ValueFrom.SecretKeyRef.Key == "service-role-key"
+		}
+	}
+
+	if !strings.Contains(pluginValue, "basic-auth") {
+		t.Fatalf("expected KONG_PLUGINS to include basic-auth, got %s", pluginValue)
+	}
+
+	if !hasUsernameEnv || !hasPasswordEnv || !hasAnonKeyEnv || !hasServiceKeyEnv {
+		t.Fatalf("expected env vars to source dashboard and key credentials from secrets")
+	}
+
+	if len(container.Command) == 0 {
+		t.Fatalf("expected custom command to render kong config when dashboard auth enabled")
+	}
+
+	configMap := BuildKongConfigMap(project)
+	config := configMap.Data["kong.yml"]
+
+	checks := []string{
+		"basicauth_credentials",
+		"keyauth_credentials",
+		"acls:",
+		"protocol: ws",
+		"- name: graphql-v1",
+	}
+	for _, token := range checks {
+		if !strings.Contains(config, token) {
+			t.Fatalf("expected kong config to include %s, got: %s", token, config)
+		}
+	}
+
+	if !strings.Contains(config, "- name: dashboard") {
+		t.Fatalf("expected kong config to include dashboard service, got: %s", config)
 	}
 }
 

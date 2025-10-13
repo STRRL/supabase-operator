@@ -295,6 +295,23 @@ func (r *SupabaseProjectReconciler) validateDependencies(ctx context.Context, pr
 		return fmt.Errorf("storage secret validation failed: %w", err)
 	}
 
+	if project.Spec.Studio != nil && project.Spec.Studio.DashboardBasicAuthSecretRef != nil {
+		secretRef := project.Spec.Studio.DashboardBasicAuthSecretRef
+		namespace := secretRef.Namespace
+		if namespace == "" {
+			namespace = project.Namespace
+		}
+
+		dashboardSecret := &corev1.Secret{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretRef.Name}, dashboardSecret); err != nil {
+			return fmt.Errorf("failed to get dashboard basic auth secret: %w", err)
+		}
+
+		if err := secrets.ValidateBasicAuthSecret(dashboardSecret); err != nil {
+			return fmt.Errorf("dashboard basic auth secret validation failed: %w", err)
+		}
+	}
+
 	return nil
 }
 

@@ -296,3 +296,58 @@ func TestValidateStorageSecret(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateBasicAuthSecret(t *testing.T) {
+	tests := []struct {
+		name    string
+		secret  *corev1.Secret
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid basic auth secret",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "dashboard-creds"},
+				Data: map[string][]byte{
+					"username": []byte("admin"),
+					"password": []byte("password"),
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing username",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "dashboard-creds"},
+				Data: map[string][]byte{
+					"password": []byte("password"),
+				},
+			},
+			wantErr: true,
+			errMsg:  "missing required key 'username'",
+		},
+		{
+			name: "missing password",
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "dashboard-creds"},
+				Data: map[string][]byte{
+					"username": []byte("admin"),
+				},
+			},
+			wantErr: true,
+			errMsg:  "missing required key 'password'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateBasicAuthSecret(tt.secret)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateBasicAuthSecret() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil && err.Error() != tt.errMsg {
+				t.Fatalf("ValidateBasicAuthSecret() error = %v, want %v", err.Error(), tt.errMsg)
+			}
+		})
+	}
+}

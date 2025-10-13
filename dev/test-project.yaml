@@ -12,3 +12,6 @@ spec:
   storage:
     secretRef:
       name: test-storage-creds
+  studio:
+    dashboardBasicAuthSecretRef:
+      name: test-dashboard-creds

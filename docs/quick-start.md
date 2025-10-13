@@ -52,7 +52,18 @@ kubectl create secret generic s3-config \
 
 If you use a self-hosted endpoint such as MinIO, set `--from-literal=forcePathStyle=true` to avoid virtual-hosted-style bucket addressing.
 
-## Step 4 – Deploy a Supabase Project
+## Step 4 – Configure Studio Basic Auth (Recommended)
+Kong serves Supabase Studio behind HTTP basic authentication. Create a secret that stores the credentials you want to require when accessing the dashboard.
+
+```bash
+kubectl create secret generic studio-dashboard-creds \
+  --from-literal=username=supabase \
+  --from-literal=password='choose-a-strong-password'
+```
+
+You can keep the sample username for local testing, but **always** change the password before exposing Kong outside the cluster.
+
+## Step 5 – Deploy a Supabase Project
 Create a file named `my-supabase.yaml` with the following content. Adjust the values to match your project requirements.
 ```yaml
 apiVersion: supabase.strrl.dev/v1alpha1
@@ -71,13 +82,16 @@ spec:
     secretRef:
       name: s3-config
     forcePathStyle: true
+  studio:
+    dashboardBasicAuthSecretRef:
+      name: studio-dashboard-creds
 ```
 Apply the manifest:
 ```bash
 kubectl apply -f my-supabase.yaml
 ```
 
-## Step 5 – Confirm the Deployment
+## Step 6 – Confirm the Deployment
 Check that the custom resource has been created and is progressing.
 ```bash
 kubectl get supabaseproject my-supabase -o yaml
@@ -92,31 +106,31 @@ List the services belonging to the Supabase stack:
 kubectl get services -l app.kubernetes.io/part-of=supabase
 ```
 
-## Step 6 – Access the Supabase APIs and Studio
+## Step 7 – Access the Supabase APIs and Studio
 Expose services locally using `kubectl port-forward`. The example below forwards the Kong API Gateway.
 ```bash
 kubectl port-forward svc/my-supabase-kong 8000:8000
 ```
-You can now interact with the Supabase REST endpoints through `http://localhost:8000`.
+You can now interact with the Supabase REST endpoints through `http://localhost:8000`. Requests to the root path (or `/` in a browser) respond with `401 Unauthorized` until you provide the dashboard credentials from `studio-dashboard-creds`.
 
 Port-forward the Studio service to open the management UI:
 ```bash
 kubectl port-forward svc/my-supabase-studio 3000:3000
 ```
-Then browse to `http://localhost:3000` to manage your project through Studio. The operator injects the generated Supabase keys so Studio can talk to your stack without additional configuration.
+Then browse to `http://localhost:3000` to manage your project through Studio. The operator injects the generated Supabase keys so Studio can talk to your stack without additional configuration. Remember that port-forwarding the Studio service bypasses Kong, so expose it only on trusted networks.
 
 To access other components, port-forward the corresponding services (for example, `my-supabase-gotrue`) or configure an Ingress of your choice.
 
-## Step 7 – Retrieve Supabase API Keys
+## Step 8 – Retrieve Supabase API Keys
 The operator stores generated API keys in a secret named `<project>-jwt` in the same namespace as your `SupabaseProject`.
 ```bash
 # Retrieve the public ANON key
 ANON_KEY=$(kubectl get secret my-supabase-jwt \
-  -o jsonpath='{.data.ANON_KEY}' | base64 -d)
+  -o jsonpath='{.data.anon-key}' | base64 -d)
 
 # Retrieve the Service Role key
 SERVICE_ROLE_KEY=$(kubectl get secret my-supabase-jwt \
-  -o jsonpath='{.data.SERVICE_ROLE_KEY}' | base64 -d)
+  -o jsonpath='{.data.service-role-key}' | base64 -d)
 
 # Optional: read the API endpoint published in status
 API_URL=$(kubectl get supabaseproject my-supabase \
@@ -124,7 +138,7 @@ API_URL=$(kubectl get supabaseproject my-supabase \
 ```
 Use `ANON_KEY` for client-side requests and reserve `SERVICE_ROLE_KEY` for backend jobs that require elevated privileges.
 
-## Step 8 – Connect to Your Database
+## Step 9 – Connect to Your Database
 Supabase relies on the external PostgreSQL database you referenced in `postgres-config`. You can reuse the stored credentials to build a connection string for `psql` or other tools.
 ```bash
 POSTGRES_HOST=$(kubectl get secret postgres-config -o jsonpath='{.data.host}' | base64 -d)
@@ -137,7 +151,7 @@ psql "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POST
 ```
 If the database is only reachable from within the cluster, create a temporary pod (for example, `kubectl run pg-client --rm -it --image=postgres:17 -- bash`) and connect from there, or establish the necessary network tunnel from your workstation.
 
-## Step 9 – Clean Up (Optional)
+## Step 10 – Clean Up (Optional)
 Remove the sample project when you are done testing:
 ```bash
 kubectl delete supabaseproject my-supabase
