@@ -100,6 +100,10 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 			},
 		},
 		{
+			Name:  "PGRST_JWT_SECRET_IS_BASE64",
+			Value: "true",
+		},
+		{
 			Name:  "PGRST_DB_ANON_ROLE",
 			Value: "anon",
 		},

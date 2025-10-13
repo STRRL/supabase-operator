@@ -36,6 +36,35 @@ func TestGenerateJWTSecret(t *testing.T) {
 	}
 }
 
+func TestGeneratePGMetaCryptoKey(t *testing.T) {
+	key, err := GeneratePGMetaCryptoKey()
+	if err != nil {
+		t.Fatalf("GeneratePGMetaCryptoKey() error = %v", err)
+	}
+
+	if len(key) == 0 {
+		t.Error("GeneratePGMetaCryptoKey() returned empty key")
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		t.Errorf("GeneratePGMetaCryptoKey() returned invalid base64: %v", err)
+	}
+
+	if len(decoded) != 32 {
+		t.Errorf("GeneratePGMetaCryptoKey() decoded length = %d, want 32", len(decoded))
+	}
+
+	key2, err := GeneratePGMetaCryptoKey()
+	if err != nil {
+		t.Fatalf("GeneratePGMetaCryptoKey() second call error = %v", err)
+	}
+
+	if key == key2 {
+		t.Error("GeneratePGMetaCryptoKey() should generate different secrets each time")
+	}
+}
+
 func TestGenerateAnonKey(t *testing.T) {
 	jwtSecret := "dGVzdC1zZWNyZXQtdGhhdC1pcy1sb25nLWVub3VnaAAAAAAAAAAAAAAAAAAAAA=="
 

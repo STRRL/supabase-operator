@@ -23,10 +23,11 @@ import (
 )
 
 const (
-	finalizerName  = "supabase.strrl.dev/finalizer"
-	jwtSecretKey   = "jwt-secret"
-	anonKeyKey     = "anon-key"
-	serviceRoleKey = "service-role-key"
+	finalizerName   = "supabase.strrl.dev/finalizer"
+	jwtSecretKey    = "jwt-secret"
+	anonKeyKey      = "anon-key"
+	serviceRoleKey  = "service-role-key"
+	pgMetaCryptoKey = "pg-meta-crypto-key"
 )
 
 type SupabaseProjectReconciler struct {
@@ -255,6 +256,17 @@ func (r *SupabaseProjectReconciler) reconcileAllComponents(ctx context.Context, 
 	componentsStatus = status.SetComponentStatus(componentsStatus, "Meta",
 		status.NewComponentStatus(status.PhaseRunning, metaImage, 1, 1))
 
+	if err := r.reconcileComponent(ctx, project, "studio", resources.BuildStudioDeployment, resources.BuildStudioService); err != nil {
+		logger.Error(err, "Failed to reconcile Studio")
+		return componentsStatus, err
+	}
+	studioImage := "supabase/studio:2025.10.01-sha-8460121"
+	if project.Spec.Studio != nil && project.Spec.Studio.Image != "" {
+		studioImage = project.Spec.Studio.Image
+	}
+	componentsStatus = status.SetComponentStatus(componentsStatus, "Studio",
+		status.NewComponentStatus(status.PhaseRunning, studioImage, 1, 1))
+
 	return componentsStatus, nil
 }
 
@@ -281,6 +293,23 @@ func (r *SupabaseProjectReconciler) validateDependencies(ctx context.Context, pr
 
 	if err := secrets.ValidateStorageSecret(storageSecret); err != nil {
 		return fmt.Errorf("storage secret validation failed: %w", err)
+	}
+
+	if project.Spec.Studio != nil && project.Spec.Studio.DashboardBasicAuthSecretRef != nil {
+		secretRef := project.Spec.Studio.DashboardBasicAuthSecretRef
+		namespace := secretRef.Namespace
+		if namespace == "" {
+			namespace = project.Namespace
+		}
+
+		dashboardSecret := &corev1.Secret{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretRef.Name}, dashboardSecret); err != nil {
+			return fmt.Errorf("failed to get dashboard basic auth secret: %w", err)
+		}
+
+		if err := secrets.ValidateBasicAuthSecret(dashboardSecret); err != nil {
+			return fmt.Errorf("dashboard basic auth secret validation failed: %w", err)
+		}
 	}
 
 	return nil
@@ -351,7 +380,21 @@ func (r *SupabaseProjectReconciler) ensureJWTSecrets(ctx context.Context, projec
 	err := r.Get(ctx, client.ObjectKey{Namespace: project.Namespace, Name: secretName}, existingSecret)
 
 	if err == nil {
-		return nil
+		if _, ok := existingSecret.Data[pgMetaCryptoKey]; ok {
+			return nil
+		}
+
+		metaCryptoKey, genErr := secrets.GeneratePGMetaCryptoKey()
+		if genErr != nil {
+			return fmt.Errorf("failed to generate PG meta crypto key: %w", genErr)
+		}
+
+		if existingSecret.Data == nil {
+			existingSecret.Data = map[string][]byte{}
+		}
+		existingSecret.Data[pgMetaCryptoKey] = []byte(metaCryptoKey)
+
+		return r.Update(ctx, existingSecret)
 	}
 
 	if !apierrors.IsNotFound(err) {
@@ -373,15 +416,21 @@ func (r *SupabaseProjectReconciler) ensureJWTSecrets(ctx context.Context, projec
 		return fmt.Errorf("failed to generate service role key: %w", err)
 	}
 
+	metaCryptoKey, err := secrets.GeneratePGMetaCryptoKey()
+	if err != nil {
+		return fmt.Errorf("failed to generate PG meta crypto key: %w", err)
+	}
+
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: project.Namespace,
 		},
 		StringData: map[string]string{
-			jwtSecretKey:   jwtSecret,
-			anonKeyKey:     anonKey,
-			serviceRoleKey: serviceRole,
+			jwtSecretKey:    jwtSecret,
+			anonKeyKey:      anonKey,
+			serviceRoleKey:  serviceRole,
+			pgMetaCryptoKey: metaCryptoKey,
 		},
 	}
 

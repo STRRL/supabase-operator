@@ -10,11 +10,11 @@ import (
 )
 
 func GenerateJWTSecret() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
-	}
-	return base64.StdEncoding.EncodeToString(bytes), nil
+	return generateRandomBase64(32)
+}
+
+func GeneratePGMetaCryptoKey() (string, error) {
+	return generateRandomBase64(32)
 }
 
 func GenerateAnonKey(jwtSecret string) (string, error) {
@@ -71,4 +71,12 @@ func GenerateServiceRoleKey(jwtSecret string) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+func generateRandomBase64(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(bytes), nil
 }
