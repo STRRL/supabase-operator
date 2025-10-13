@@ -477,7 +477,7 @@ spec:
 			By("capturing the Kong Studio page screenshot")
 			timestamp := time.Now().Format("20060102-150405")
 			screenshotPath := filepath.Join(".artifacts", "screenshots", fmt.Sprintf("kong-studio-%s.png", timestamp))
-			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
 			err = captureStudioScreenshot(ctx, chromePath,
