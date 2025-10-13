@@ -1,6 +1,8 @@
 module github.com/strrl/supabase-operator
 
-go 1.24.5
+go 1.25
+
+toolchain go1.25.2
 
 require (
 	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d

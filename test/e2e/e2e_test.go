@@ -609,27 +609,63 @@ func captureStudioScreenshot(ctx context.Context, chromePath, url, username, pas
 		chromedp.Flag("single-process", true),
 		chromedp.Flag("hide-scrollbars", true),
 		chromedp.Flag("window-size", "1280,720"),
+		chromedp.Flag("remote-allow-origins", "*"),
 	)
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocOpts...)
-	defer cancelAlloc()
 
-	browserCtx, cancelCtx := chromedp.NewContext(allocCtx)
-	defer cancelCtx()
+	var (
+		screenshot []byte
+		lastErr    error
+	)
 
-	var screenshot []byte
-	tasks := chromedp.Tasks{
-		network.Enable(),
-		network.SetExtraHTTPHeaders(network.Headers(map[string]interface{}{
-			"Authorization": authHeader,
-		})),
-		chromedp.Navigate(url),
-		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Sleep(2 * time.Second),
-		chromedp.CaptureScreenshot(&screenshot),
+	const maxAttempts = 3
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		attemptAllocatorCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocOpts...)
+		attemptCtx, cancelTimeout := context.WithTimeout(attemptAllocatorCtx, 5*time.Minute)
+
+		browserCtx, cancelCtx := chromedp.NewContext(
+			attemptCtx,
+			chromedp.WithLogf(func(format string, a ...any) {
+				_, _ = fmt.Fprintf(GinkgoWriter, "[chromedp] "+format+"\n", a...)
+			}),
+		)
+
+		var attemptScreenshot []byte
+		tasks := chromedp.Tasks{
+			network.Enable(),
+			network.SetExtraHTTPHeaders(network.Headers(map[string]interface{}{
+				"Authorization": authHeader,
+			})),
+			chromedp.Navigate(url),
+			chromedp.WaitReady("body", chromedp.ByQuery),
+			chromedp.Sleep(2 * time.Second),
+			chromedp.CaptureScreenshot(&attemptScreenshot),
+		}
+
+		runErr := chromedp.Run(browserCtx, tasks)
+		cancelCtx()
+		cancelTimeout()
+		cancelAlloc()
+
+		if runErr == nil {
+			screenshot = attemptScreenshot
+			lastErr = nil
+			break
+		}
+
+		lastErr = runErr
+		_, _ = fmt.Fprintf(GinkgoWriter, "chromedp attempt %d failed: %v\n", attempt, runErr)
+
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-	if err := chromedp.Run(browserCtx, tasks); err != nil {
-		return err
+
+	if lastErr != nil {
+		return fmt.Errorf("capture studio screenshot failed after %d attempts: %w", maxAttempts, lastErr)
 	}
+
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		return err
 	}
