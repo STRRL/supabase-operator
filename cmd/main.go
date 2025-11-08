@@ -21,6 +21,7 @@ import (
 
 	supabasev1alpha1 "github.com/strrl/supabase-operator/api/v1alpha1"
 	"github.com/strrl/supabase-operator/internal/controller"
+	internalwebhook "github.com/strrl/supabase-operator/internal/webhook"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -167,6 +168,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SupabaseProject")
+		os.Exit(1)
+	}
+
+	if err := (&internalwebhook.SupabaseProjectWebhook{
+		Client: mgr.GetClient(),
+	}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "SupabaseProject")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

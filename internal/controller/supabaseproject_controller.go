@@ -194,78 +194,50 @@ func (r *SupabaseProjectReconciler) reconcileAllComponents(ctx context.Context, 
 		logger.Error(err, "Failed to reconcile Kong")
 		return componentsStatus, err
 	}
-	kongImage := "kong:2.8.1"
-	if project.Spec.Kong != nil && project.Spec.Kong.Image != "" {
-		kongImage = project.Spec.Kong.Image
-	}
 	componentsStatus = status.SetComponentStatus(componentsStatus, "Kong",
-		status.NewComponentStatus(status.PhaseRunning, kongImage, 1, 1))
+		status.NewComponentStatus(status.PhaseRunning, project.Spec.Kong.Image, 1, 1))
 
 	if err := r.reconcileComponent(ctx, project, "auth", resources.BuildAuthDeployment, resources.BuildAuthService); err != nil {
 		logger.Error(err, "Failed to reconcile Auth")
 		return componentsStatus, err
 	}
-	authImage := "supabase/gotrue:v2.180.0"
-	if project.Spec.Auth != nil && project.Spec.Auth.Image != "" {
-		authImage = project.Spec.Auth.Image
-	}
 	componentsStatus = status.SetComponentStatus(componentsStatus, "Auth",
-		status.NewComponentStatus(status.PhaseRunning, authImage, 1, 1))
+		status.NewComponentStatus(status.PhaseRunning, project.Spec.Auth.Image, 1, 1))
 
 	if err := r.reconcileComponent(ctx, project, "postgrest", resources.BuildPostgRESTDeployment, resources.BuildPostgRESTService); err != nil {
 		logger.Error(err, "Failed to reconcile PostgREST")
 		return componentsStatus, err
 	}
-	postgrestImage := "postgrest/postgrest:v13.0.7"
-	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Image != "" {
-		postgrestImage = project.Spec.PostgREST.Image
-	}
 	componentsStatus = status.SetComponentStatus(componentsStatus, "PostgREST",
-		status.NewComponentStatus(status.PhaseRunning, postgrestImage, 1, 1))
+		status.NewComponentStatus(status.PhaseRunning, project.Spec.PostgREST.Image, 1, 1))
 
 	if err := r.reconcileComponent(ctx, project, "realtime", resources.BuildRealtimeDeployment, resources.BuildRealtimeService); err != nil {
 		logger.Error(err, "Failed to reconcile Realtime")
 		return componentsStatus, err
 	}
-	realtimeImage := "supabase/realtime:v2.51.11"
-	if project.Spec.Realtime != nil && project.Spec.Realtime.Image != "" {
-		realtimeImage = project.Spec.Realtime.Image
-	}
 	componentsStatus = status.SetComponentStatus(componentsStatus, "Realtime",
-		status.NewComponentStatus(status.PhaseRunning, realtimeImage, 1, 1))
+		status.NewComponentStatus(status.PhaseRunning, project.Spec.Realtime.Image, 1, 1))
 
 	if err := r.reconcileComponent(ctx, project, "storage", resources.BuildStorageDeployment, resources.BuildStorageService); err != nil {
 		logger.Error(err, "Failed to reconcile Storage")
 		return componentsStatus, err
 	}
-	storageImage := "supabase/storage-api:v1.28.0"
-	if project.Spec.StorageAPI != nil && project.Spec.StorageAPI.Image != "" {
-		storageImage = project.Spec.StorageAPI.Image
-	}
 	componentsStatus = status.SetComponentStatus(componentsStatus, "StorageAPI",
-		status.NewComponentStatus(status.PhaseRunning, storageImage, 1, 1))
+		status.NewComponentStatus(status.PhaseRunning, project.Spec.StorageAPI.Image, 1, 1))
 
 	if err := r.reconcileComponent(ctx, project, "meta", resources.BuildMetaDeployment, resources.BuildMetaService); err != nil {
 		logger.Error(err, "Failed to reconcile Meta")
 		return componentsStatus, err
 	}
-	metaImage := "supabase/postgres-meta:v0.102.0"
-	if project.Spec.Meta != nil && project.Spec.Meta.Image != "" {
-		metaImage = project.Spec.Meta.Image
-	}
 	componentsStatus = status.SetComponentStatus(componentsStatus, "Meta",
-		status.NewComponentStatus(status.PhaseRunning, metaImage, 1, 1))
+		status.NewComponentStatus(status.PhaseRunning, project.Spec.Meta.Image, 1, 1))
 
 	if err := r.reconcileComponent(ctx, project, "studio", resources.BuildStudioDeployment, resources.BuildStudioService); err != nil {
 		logger.Error(err, "Failed to reconcile Studio")
 		return componentsStatus, err
 	}
-	studioImage := "supabase/studio:2025.10.01-sha-8460121"
-	if project.Spec.Studio != nil && project.Spec.Studio.Image != "" {
-		studioImage = project.Spec.Studio.Image
-	}
 	componentsStatus = status.SetComponentStatus(componentsStatus, "Studio",
-		status.NewComponentStatus(status.PhaseRunning, studioImage, 1, 1))
+		status.NewComponentStatus(status.PhaseRunning, project.Spec.Studio.Image, 1, 1))
 
 	return componentsStatus, nil
 }

@@ -1,4 +1,4 @@
-package v1alpha1
+package webhook
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	supabasev1alpha1 "github.com/strrl/supabase-operator/api/v1alpha1"
 )
 
 // +kubebuilder:object:generate=false
@@ -21,7 +23,7 @@ type SupabaseProjectWebhook struct {
 func (r *SupabaseProjectWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	r.Client = mgr.GetClient()
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&SupabaseProject{}).
+		For(&supabasev1alpha1.SupabaseProject{}).
 		WithValidator(r).
 		WithDefaulter(r).
 		Complete()
@@ -31,16 +33,65 @@ var _ webhook.CustomValidator = &SupabaseProjectWebhook{}
 var _ webhook.CustomDefaulter = &SupabaseProjectWebhook{}
 
 func (r *SupabaseProjectWebhook) Default(ctx context.Context, obj runtime.Object) error {
-	_, ok := obj.(*SupabaseProject)
+	project, ok := obj.(*supabasev1alpha1.SupabaseProject)
 	if !ok {
 		return fmt.Errorf("expected SupabaseProject, got %T", obj)
+	}
+
+	if project.Spec.Kong == nil {
+		project.Spec.Kong = &supabasev1alpha1.KongConfig{}
+	}
+	if project.Spec.Kong.Image == "" {
+		project.Spec.Kong.Image = DefaultKongImage
+	}
+
+	if project.Spec.Auth == nil {
+		project.Spec.Auth = &supabasev1alpha1.AuthConfig{}
+	}
+	if project.Spec.Auth.Image == "" {
+		project.Spec.Auth.Image = DefaultAuthImage
+	}
+
+	if project.Spec.PostgREST == nil {
+		project.Spec.PostgREST = &supabasev1alpha1.PostgRESTConfig{}
+	}
+	if project.Spec.PostgREST.Image == "" {
+		project.Spec.PostgREST.Image = DefaultPostgRESTImage
+	}
+
+	if project.Spec.Realtime == nil {
+		project.Spec.Realtime = &supabasev1alpha1.RealtimeConfig{}
+	}
+	if project.Spec.Realtime.Image == "" {
+		project.Spec.Realtime.Image = DefaultRealtimeImage
+	}
+
+	if project.Spec.StorageAPI == nil {
+		project.Spec.StorageAPI = &supabasev1alpha1.StorageAPIConfig{}
+	}
+	if project.Spec.StorageAPI.Image == "" {
+		project.Spec.StorageAPI.Image = DefaultStorageAPIImage
+	}
+
+	if project.Spec.Meta == nil {
+		project.Spec.Meta = &supabasev1alpha1.MetaConfig{}
+	}
+	if project.Spec.Meta.Image == "" {
+		project.Spec.Meta.Image = DefaultMetaImage
+	}
+
+	if project.Spec.Studio == nil {
+		project.Spec.Studio = &supabasev1alpha1.StudioConfig{}
+	}
+	if project.Spec.Studio.Image == "" {
+		project.Spec.Studio.Image = DefaultStudioImage
 	}
 
 	return nil
 }
 
 func (r *SupabaseProjectWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	project, ok := obj.(*SupabaseProject)
+	project, ok := obj.(*supabasev1alpha1.SupabaseProject)
 	if !ok {
 		return nil, fmt.Errorf("expected SupabaseProject, got %T", obj)
 	}
@@ -116,7 +167,7 @@ func (r *SupabaseProjectWebhook) validateStorageSecretKeys(secret *corev1.Secret
 	return nil
 }
 
-func (r *SupabaseProjectWebhook) validateImages(project *SupabaseProject) error {
+func (r *SupabaseProjectWebhook) validateImages(project *supabasev1alpha1.SupabaseProject) error {
 	imagesToValidate := make(map[string]string)
 
 	if project.Spec.Kong != nil && project.Spec.Kong.Image != "" {
