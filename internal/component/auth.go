@@ -1,7 +1,8 @@
-package resources
+package component
 
 import (
 	"github.com/strrl/supabase-operator/api/v1alpha1"
+	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -9,26 +10,34 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
+type AuthBuilder struct{}
+
+var _ ComponentBuilder = (*AuthBuilder)(nil)
+
+func (b *AuthBuilder) Name() string {
+	return "auth"
+}
+
+func (b *AuthBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv1.Deployment, error) {
 	replicas := int32(1)
-	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Replicas > 0 {
-		replicas = project.Spec.PostgREST.Replicas
+	if project.Spec.Auth != nil && project.Spec.Auth.Replicas > 0 {
+		replicas = project.Spec.Auth.Replicas
 	}
 
-	image := "postgrest/postgrest:v13.0.7"
-	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Image != "" {
-		image = project.Spec.PostgREST.Image
+	image := webhook.DefaultAuthImage
+	if project.Spec.Auth != nil && project.Spec.Auth.Image != "" {
+		image = project.Spec.Auth.Image
 	}
 
-	resources := getPostgRESTDefaultResources()
-	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Resources != nil {
-		resources = *project.Spec.PostgREST.Resources
+	resources := getAuthDefaultResources()
+	if project.Spec.Auth != nil && project.Spec.Auth.Resources != nil {
+		resources = *project.Spec.Auth.Resources
 	}
 
 	labels := map[string]string{
-		"app.kubernetes.io/name":       "postgrest",
+		"app.kubernetes.io/name":       "auth",
 		"app.kubernetes.io/instance":   project.Name,
-		"app.kubernetes.io/component":  "rest-api",
+		"app.kubernetes.io/component":  "authentication",
 		"app.kubernetes.io/part-of":    "supabase",
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
@@ -40,6 +49,22 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 	}
 
 	env := []corev1.EnvVar{
+		{
+			Name:  "API_EXTERNAL_URL",
+			Value: "http://localhost:8000",
+		},
+		{
+			Name:  "GOTRUE_SITE_URL",
+			Value: "http://localhost:8000",
+		},
+		{
+			Name:  "GOTRUE_API_PORT",
+			Value: "9999",
+		},
+		{
+			Name:  "GOTRUE_DB_DRIVER",
+			Value: "postgres",
+		},
 		{
 			Name: "DB_HOST",
 			ValueFrom: &corev1.EnvVarSource{
@@ -74,6 +99,17 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 			},
 		},
 		{
+			Name: "DB_USER",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Spec.Database.SecretRef.Name,
+					},
+					Key: "username",
+				},
+			},
+		},
+		{
 			Name: "DB_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
@@ -85,11 +121,15 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 			},
 		},
 		{
-			Name:  "PGRST_DB_URI",
-			Value: "postgres://authenticator:$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=" + sslMode,
+			Name:  "DB_SSL_MODE",
+			Value: sslMode,
 		},
 		{
-			Name: "PGRST_JWT_SECRET",
+			Name:  "GOTRUE_DB_DATABASE_URL",
+			Value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSL_MODE)",
+		},
+		{
+			Name: "GOTRUE_JWT_SECRET",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -100,26 +140,30 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 			},
 		},
 		{
-			Name:  "PGRST_JWT_SECRET_IS_BASE64",
+			Name:  "GOTRUE_JWT_EXP",
+			Value: "3600",
+		},
+		{
+			Name:  "GOTRUE_JWT_DEFAULT_GROUP_NAME",
+			Value: "authenticated",
+		},
+		{
+			Name:  "GOTRUE_DISABLE_SIGNUP",
+			Value: "false",
+		},
+		{
+			Name:  "GOTRUE_EXTERNAL_EMAIL_ENABLED",
 			Value: "true",
 		},
 		{
-			Name:  "PGRST_DB_ANON_ROLE",
-			Value: "anon",
-		},
-		{
-			Name:  "PGRST_DB_SCHEMA",
-			Value: "public",
-		},
-		{
-			Name:  "PGRST_DB_EXTRA_SEARCH_PATH",
-			Value: "public",
+			Name:  "GOTRUE_MAILER_AUTOCONFIRM",
+			Value: "true",
 		},
 	}
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      project.Name + "-postgrest",
+			Name:      project.Name + "-auth",
 			Namespace: project.Namespace,
 			Labels:    labels,
 		},
@@ -135,14 +179,14 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:      "postgrest",
+							Name:      "auth",
 							Image:     image,
 							Resources: resources,
 							Env:       env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
-									ContainerPort: 3000,
+									ContainerPort: 9999,
 									Protocol:      corev1.ProtocolTCP,
 								},
 							},
@@ -153,28 +197,28 @@ func BuildPostgRESTDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploym
 		},
 	}
 
-	if project.Spec.PostgREST != nil && len(project.Spec.PostgREST.ExtraEnv) > 0 {
+	if project.Spec.Auth != nil && len(project.Spec.Auth.ExtraEnv) > 0 {
 		deployment.Spec.Template.Spec.Containers[0].Env = append(
 			deployment.Spec.Template.Spec.Containers[0].Env,
-			project.Spec.PostgREST.ExtraEnv...,
+			project.Spec.Auth.ExtraEnv...,
 		)
 	}
 
-	return deployment
+	return deployment, nil
 }
 
-func BuildPostgRESTService(project *v1alpha1.SupabaseProject) *corev1.Service {
+func (b *AuthBuilder) BuildService(project *v1alpha1.SupabaseProject) (*corev1.Service, error) {
 	labels := map[string]string{
-		"app.kubernetes.io/name":       "postgrest",
+		"app.kubernetes.io/name":       "auth",
 		"app.kubernetes.io/instance":   project.Name,
-		"app.kubernetes.io/component":  "rest-api",
+		"app.kubernetes.io/component":  "authentication",
 		"app.kubernetes.io/part-of":    "supabase",
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      project.Name + "-postgrest",
+			Name:      project.Name + "-auth",
 			Namespace: project.Namespace,
 			Labels:    labels,
 		},
@@ -184,24 +228,24 @@ func BuildPostgRESTService(project *v1alpha1.SupabaseProject) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "http",
-					Port:       3000,
-					TargetPort: intstr.FromInt(3000),
+					Port:       9999,
+					TargetPort: intstr.FromInt(9999),
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
 		},
-	}
+	}, nil
 }
 
-func getPostgRESTDefaultResources() corev1.ResourceRequirements {
+func getAuthDefaultResources() corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse("128Mi"),
-			corev1.ResourceCPU:    resource.MustParse("100m"),
+			corev1.ResourceMemory: resource.MustParse("64Mi"),
+			corev1.ResourceCPU:    resource.MustParse("50m"),
 		},
 		Limits: corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse("256Mi"),
-			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("128Mi"),
+			corev1.ResourceCPU:    resource.MustParse("100m"),
 		},
 	}
 }

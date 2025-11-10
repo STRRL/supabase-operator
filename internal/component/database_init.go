@@ -14,11 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package resources
+package component
 
 import (
 	"github.com/strrl/supabase-operator/api/v1alpha1"
 	"github.com/strrl/supabase-operator/internal/database/migrations"
+	"github.com/strrl/supabase-operator/internal/webhook"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -137,7 +138,7 @@ func BuildDatabaseInitJob(project *v1alpha1.SupabaseProject) *batchv1.Job {
 					Containers: []corev1.Container{
 						{
 							Name:  "init",
-							Image: "postgres:15-alpine",
+							Image: webhook.DefaultPostgresImage,
 							Command: []string{
 								"bash",
 								"/scripts/run-migrations.sh",

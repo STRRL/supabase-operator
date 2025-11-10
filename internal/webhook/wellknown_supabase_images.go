@@ -10,4 +10,5 @@ const (
 	DefaultStorageAPIImage = "supabase/storage-api:v1.28.0"
 	DefaultMetaImage       = "supabase/postgres-meta:v0.102.0"
 	DefaultStudioImage     = "supabase/studio:2025.10.01-sha-8460121"
+	DefaultPostgresImage   = "postgres:15-alpine"
 )

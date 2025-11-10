@@ -1,7 +1,8 @@
-package resources
+package component
 
 import (
 	"github.com/strrl/supabase-operator/api/v1alpha1"
+	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -9,13 +10,21 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func BuildStorageDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
+type StorageBuilder struct{}
+
+var _ ComponentBuilder = (*StorageBuilder)(nil)
+
+func (b *StorageBuilder) Name() string {
+	return "storage"
+}
+
+func (b *StorageBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv1.Deployment, error) {
 	replicas := int32(1)
 	if project.Spec.StorageAPI != nil && project.Spec.StorageAPI.Replicas > 0 {
 		replicas = project.Spec.StorageAPI.Replicas
 	}
 
-	image := "supabase/storage-api:v1.28.0"
+	image := webhook.DefaultStorageAPIImage
 	if project.Spec.StorageAPI != nil && project.Spec.StorageAPI.Image != "" {
 		image = project.Spec.StorageAPI.Image
 	}
@@ -244,10 +253,10 @@ func BuildStorageDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deploymen
 		)
 	}
 
-	return deployment
+	return deployment, nil
 }
 
-func BuildStorageService(project *v1alpha1.SupabaseProject) *corev1.Service {
+func (b *StorageBuilder) BuildService(project *v1alpha1.SupabaseProject) (*corev1.Service, error) {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "storage",
 		"app.kubernetes.io/instance":   project.Name,
@@ -274,7 +283,7 @@ func BuildStorageService(project *v1alpha1.SupabaseProject) *corev1.Service {
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 func getStorageDefaultResources() corev1.ResourceRequirements {

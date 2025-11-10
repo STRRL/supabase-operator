@@ -1,10 +1,11 @@
-package resources
+package component
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/strrl/supabase-operator/api/v1alpha1"
+	"github.com/strrl/supabase-operator/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,7 +22,11 @@ func TestBuildKongDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := BuildKongDeployment(project)
+	builder := &KongBuilder{}
+	deployment, err := builder.BuildDeployment(project)
+	if err != nil {
+		t.Fatalf("Failed to build deployment: %v", err)
+	}
 
 	if deployment.Name != "test-project-kong" {
 		t.Errorf("Expected name 'test-project-kong', got '%s'", deployment.Name)
@@ -35,8 +40,8 @@ func TestBuildKongDeployment(t *testing.T) {
 		t.Errorf("Expected 1 replica, got %d", *deployment.Spec.Replicas)
 	}
 
-	if deployment.Spec.Template.Spec.Containers[0].Image != "kong:2.8.1" {
-		t.Errorf("Expected image 'kong:2.8.1', got '%s'", deployment.Spec.Template.Spec.Containers[0].Image)
+	if deployment.Spec.Template.Spec.Containers[0].Image != webhook.DefaultKongImage {
+		t.Errorf("Expected image '%s', got '%s'", webhook.DefaultKongImage, deployment.Spec.Template.Spec.Containers[0].Image)
 	}
 
 	resources := deployment.Spec.Template.Spec.Containers[0].Resources
@@ -65,7 +70,11 @@ func TestBuildKongDeployment_CustomConfig(t *testing.T) {
 		},
 	}
 
-	deployment := BuildKongDeployment(project)
+	builder := &KongBuilder{}
+	deployment, err := builder.BuildDeployment(project)
+	if err != nil {
+		t.Fatalf("Failed to build deployment: %v", err)
+	}
 
 	if *deployment.Spec.Replicas != 3 {
 		t.Errorf("Expected 3 replicas, got %d", *deployment.Spec.Replicas)
@@ -89,7 +98,11 @@ func TestBuildKongService(t *testing.T) {
 		},
 	}
 
-	service := BuildKongService(project)
+	builder := &KongBuilder{}
+	service, err := builder.BuildService(project)
+	if err != nil {
+		t.Fatalf("Failed to build service: %v", err)
+	}
 
 	if service.Name != "test-project-kong" {
 		t.Errorf("Expected name 'test-project-kong', got '%s'", service.Name)
@@ -118,7 +131,11 @@ func TestBuildKongWithDashboardBasicAuth(t *testing.T) {
 		},
 	}
 
-	deployment := BuildKongDeployment(project)
+	builder := &KongBuilder{}
+	deployment, err := builder.BuildDeployment(project)
+	if err != nil {
+		t.Fatalf("Failed to build deployment: %v", err)
+	}
 	container := deployment.Spec.Template.Spec.Containers[0]
 
 	var pluginValue string
@@ -183,14 +200,18 @@ func TestBuildAuthDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := BuildAuthDeployment(project)
+	builder := &AuthBuilder{}
+	deployment, err := builder.BuildDeployment(project)
+	if err != nil {
+		t.Fatalf("Failed to build deployment: %v", err)
+	}
 
 	if deployment.Name != "test-project-auth" {
 		t.Errorf("Expected name 'test-project-auth', got '%s'", deployment.Name)
 	}
 
-	if deployment.Spec.Template.Spec.Containers[0].Image != "supabase/gotrue:v2.180.0" {
-		t.Errorf("Expected default image, got '%s'", deployment.Spec.Template.Spec.Containers[0].Image)
+	if deployment.Spec.Template.Spec.Containers[0].Image != webhook.DefaultAuthImage {
+		t.Errorf("Expected default image '%s', got '%s'", webhook.DefaultAuthImage, deployment.Spec.Template.Spec.Containers[0].Image)
 	}
 }
 
@@ -205,7 +226,11 @@ func TestBuildPostgRESTDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := BuildPostgRESTDeployment(project)
+	builder := &PostgRESTBuilder{}
+	deployment, err := builder.BuildDeployment(project)
+	if err != nil {
+		t.Fatalf("Failed to build deployment: %v", err)
+	}
 
 	if deployment.Name != "test-project-postgrest" {
 		t.Errorf("Expected name 'test-project-postgrest', got '%s'", deployment.Name)
@@ -223,7 +248,11 @@ func TestBuildRealtimeDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := BuildRealtimeDeployment(project)
+	builder := &RealtimeBuilder{}
+	deployment, err := builder.BuildDeployment(project)
+	if err != nil {
+		t.Fatalf("Failed to build deployment: %v", err)
+	}
 
 	if deployment.Name != "test-project-realtime" {
 		t.Errorf("Expected name 'test-project-realtime', got '%s'", deployment.Name)
@@ -241,7 +270,11 @@ func TestBuildStorageDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := BuildStorageDeployment(project)
+	builder := &StorageBuilder{}
+	deployment, err := builder.BuildDeployment(project)
+	if err != nil {
+		t.Fatalf("Failed to build deployment: %v", err)
+	}
 
 	if deployment.Name != "test-project-storage" {
 		t.Errorf("Expected name 'test-project-storage', got '%s'", deployment.Name)
@@ -259,7 +292,11 @@ func TestBuildMetaDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := BuildMetaDeployment(project)
+	builder := &MetaBuilder{}
+	deployment, err := builder.BuildDeployment(project)
+	if err != nil {
+		t.Fatalf("Failed to build deployment: %v", err)
+	}
 
 	if deployment.Name != "test-project-meta" {
 		t.Errorf("Expected name 'test-project-meta', got '%s'", deployment.Name)
@@ -280,15 +317,19 @@ func TestBuildStudioDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := BuildStudioDeployment(project)
+	builder := &StudioBuilder{}
+	deployment, err := builder.BuildDeployment(project)
+	if err != nil {
+		t.Fatalf("Failed to build deployment: %v", err)
+	}
 
 	if deployment.Name != "test-project-studio" {
 		t.Errorf("Expected name 'test-project-studio', got '%s'", deployment.Name)
 	}
 
 	container := deployment.Spec.Template.Spec.Containers[0]
-	if container.Image != "supabase/studio:2025.10.01-sha-8460121" {
-		t.Errorf("Expected default image, got '%s'", container.Image)
+	if container.Image != webhook.DefaultStudioImage {
+		t.Errorf("Expected default image '%s', got '%s'", webhook.DefaultStudioImage, container.Image)
 	}
 }
 
@@ -300,7 +341,11 @@ func TestBuildStudioService(t *testing.T) {
 		},
 	}
 
-	service := BuildStudioService(project)
+	builder := &StudioBuilder{}
+	service, err := builder.BuildService(project)
+	if err != nil {
+		t.Fatalf("Failed to build service: %v", err)
+	}
 
 	if service.Name != "test-project-studio" {
 		t.Errorf("Expected name 'test-project-studio', got '%s'", service.Name)

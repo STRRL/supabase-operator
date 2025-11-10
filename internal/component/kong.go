@@ -1,10 +1,11 @@
-package resources
+package component
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/strrl/supabase-operator/api/v1alpha1"
+	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -12,13 +13,21 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
+type KongBuilder struct{}
+
+var _ ComponentBuilder = (*KongBuilder)(nil)
+
+func (b *KongBuilder) Name() string {
+	return "kong"
+}
+
+func (b *KongBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv1.Deployment, error) {
 	replicas := int32(1)
 	if project.Spec.Kong != nil && project.Spec.Kong.Replicas > 0 {
 		replicas = project.Spec.Kong.Replicas
 	}
 
-	image := "kong:2.8.1"
+	image := webhook.DefaultKongImage
 	if project.Spec.Kong != nil && project.Spec.Kong.Image != "" {
 		image = project.Spec.Kong.Image
 	}
@@ -202,7 +211,7 @@ func BuildKongDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		)
 	}
 
-	return deployment
+	return deployment, nil
 }
 
 func BuildKongConfigMap(project *v1alpha1.SupabaseProject) *corev1.ConfigMap {
@@ -435,7 +444,7 @@ services:
 	}
 }
 
-func BuildKongService(project *v1alpha1.SupabaseProject) *corev1.Service {
+func (b *KongBuilder) BuildService(project *v1alpha1.SupabaseProject) (*corev1.Service, error) {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "kong",
 		"app.kubernetes.io/instance":   project.Name,
@@ -468,7 +477,7 @@ func BuildKongService(project *v1alpha1.SupabaseProject) *corev1.Service {
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 func getKongDefaultResources() corev1.ResourceRequirements {
