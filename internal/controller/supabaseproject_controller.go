@@ -101,7 +101,7 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			project.Status.Conditions,
 			status.NewReadyCondition(metav1.ConditionFalse, "DependencyValidationFailed", err.Error()),
 		)
-		r.Recorder.Event(project, corev1.EventTypeWarning, EventReasonValidationFailed, fmt.Sprintf(EventMessageDependencyValidationFailedFmt, err))
+		r.Recorder.Eventf(project, corev1.EventTypeWarning, EventReasonValidationFailed, EventMessageDependencyValidationFailedFmt, err)
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
@@ -118,7 +118,7 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		logger.Error(err, "Failed to ensure JWT secrets")
 		project.Status.Phase = status.PhaseFailed
 		project.Status.Message = fmt.Sprintf("Secret generation failed: %v", err)
-		r.Recorder.Event(project, corev1.EventTypeWarning, EventReasonSecretsFailed, fmt.Sprintf(EventMessageSecretsFailedFmt, err))
+		r.Recorder.Eventf(project, corev1.EventTypeWarning, EventReasonSecretsFailed, EventMessageSecretsFailedFmt, err)
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
@@ -134,7 +134,7 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	jobResult, err := r.ensureDatabaseInitJob(ctx, project)
 	if err != nil {
 		logger.Error(err, "Failed to ensure database init job")
-		r.Recorder.Event(project, corev1.EventTypeWarning, EventReasonDatabaseInitFailed, fmt.Sprintf(EventMessageDatabaseInitFailedFmt, err))
+		r.Recorder.Eventf(project, corev1.EventTypeWarning, EventReasonDatabaseInitFailed, EventMessageDatabaseInitFailedFmt, err)
 		project.Status.Phase = status.PhaseFailed
 		project.Status.Message = fmt.Sprintf("Database initialization job failed: %v", err)
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
