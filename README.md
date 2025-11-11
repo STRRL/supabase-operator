@@ -394,9 +394,13 @@ make manifests  # Generate CRD and RBAC
 make generate   # Generate deepcopy code
 ```
 
-## Architecture Decisions
+## Documentation
 
-See [future-considerations.md](specs/001-selfhost-supabase-operator/future-considerations.md) for deferred features and architectural flexibility.
+- **[Architecture Guide](docs/architecture.md)**: Detailed architecture documentation covering system design, controller patterns, component deployment, status management, and design decisions
+- **[API Reference](docs/api-reference.md)**: Complete API reference for the SupabaseProject CRD with field descriptions, examples, and validation rules
+- **[Database Initialization](docs/database-initialization.md)**: PostgreSQL setup requirements and initialization details
+- **[Quick Start](docs/quick-start.md)**: Getting started guide with step-by-step instructions
+- **[Future Considerations](specs/001-selfhost-supabase-operator/future-considerations.md)**: Deferred features and architectural flexibility
 
 ## Contributing
 

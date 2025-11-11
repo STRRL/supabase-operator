@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -33,7 +34,8 @@ const (
 
 type SupabaseProjectReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=supabase.strrl.dev,resources=supabaseprojects,verbs=get;list;watch;create;update;patch;delete
@@ -83,6 +85,7 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if project.Status.Phase == "" {
 		project.Status.Phase = status.PhasePending
 		project.Status.Message = status.GetPhaseMessage(status.PhasePending)
+		r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessagePhasePending)
 	}
 
 	project.Status.Conditions = status.SetCondition(
@@ -98,33 +101,40 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			project.Status.Conditions,
 			status.NewReadyCondition(metav1.ConditionFalse, "DependencyValidationFailed", err.Error()),
 		)
+		r.Recorder.Event(project, corev1.EventTypeWarning, EventReasonValidationFailed, fmt.Sprintf(EventMessageDependencyValidationFailedFmt, err))
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonDependenciesValidated, EventMessageDependenciesValidated)
 
 	// Generate JWT secrets first (needed by database init job)
 	project.Status.Phase = status.PhaseDeployingSecrets
 	project.Status.Message = status.GetPhaseMessage(status.PhaseDeployingSecrets)
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessageDeployingSecrets)
 
 	if err := r.ensureJWTSecrets(ctx, project); err != nil {
 		logger.Error(err, "Failed to ensure JWT secrets")
 		project.Status.Phase = status.PhaseFailed
 		project.Status.Message = fmt.Sprintf("Secret generation failed: %v", err)
+		r.Recorder.Event(project, corev1.EventTypeWarning, EventReasonSecretsFailed, fmt.Sprintf(EventMessageSecretsFailedFmt, err))
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonSecretsCreated, EventMessageSecretsCreated)
 
 	// Initialize database with required extensions and roles via Kubernetes Job
 	project.Status.Phase = status.PhaseInitializingDatabase
 	project.Status.Message = status.GetPhaseMessage(status.PhaseInitializingDatabase)
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessageInitializingDatabase)
 
 	jobResult, err := r.ensureDatabaseInitJob(ctx, project)
 	if err != nil {
 		logger.Error(err, "Failed to ensure database init job")
+		r.Recorder.Event(project, corev1.EventTypeWarning, EventReasonDatabaseInitFailed, fmt.Sprintf(EventMessageDatabaseInitFailedFmt, err))
 		project.Status.Phase = status.PhaseFailed
 		project.Status.Message = fmt.Sprintf("Database initialization job failed: %v", err)
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
@@ -140,8 +150,10 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		return jobResult, nil
 	}
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonDatabaseInitialized, EventMessageDatabaseInitialized)
 
 	project.Status.Phase = status.PhaseDeployingComponents
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessageDeployingComponents)
 
 	componentsStatus, err := r.reconcileAllComponents(ctx, project)
 	if err != nil {
@@ -159,6 +171,7 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		project.Status.Conditions,
 		status.NewProgressingCondition(metav1.ConditionFalse, "ReconciliationComplete", "Reconciliation complete"),
 	)
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessageSupabaseProjectRunning)
 	project.Status.ObservedGeneration = project.Generation
 	now := metav1.Now()
 	project.Status.LastReconcileTime = &now
