@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,6 +32,11 @@ func (r *SupabaseProjectWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error
 
 var _ webhook.CustomValidator = &SupabaseProjectWebhook{}
 var _ webhook.CustomDefaulter = &SupabaseProjectWebhook{}
+
+var (
+	requiredDatabaseSecretKeys = []string{"host", "port", "database", "username", "password"}
+	requiredStorageSecretKeys  = []string{"endpoint", "region", "bucket", "accessKeyId", "secretAccessKey"}
+)
 
 func (r *SupabaseProjectWebhook) Default(ctx context.Context, obj runtime.Object) error {
 	project, ok := obj.(*supabasev1alpha1.SupabaseProject)
@@ -95,8 +102,13 @@ func (r *SupabaseProjectWebhook) ValidateCreate(ctx context.Context, obj runtime
 		return nil, fmt.Errorf("expected SupabaseProject, got %T", obj)
 	}
 
-	// Validate secret references (format only, not existence or content)
+	// Validate secret references (format only)
 	if err := r.validateSecretReferences(project); err != nil {
+		return nil, err
+	}
+
+	// Validate required secrets and keys
+	if err := r.validateSecrets(ctx, project); err != nil {
 		return nil, err
 	}
 
@@ -126,6 +138,64 @@ func (r *SupabaseProjectWebhook) validateSecretReferences(project *supabasev1alp
 	// Validate storage secret reference
 	if project.Spec.Storage.SecretRef.Name == "" {
 		return fmt.Errorf("storage.secretRef.name cannot be empty")
+	}
+
+	return nil
+}
+
+func (r *SupabaseProjectWebhook) validateSecrets(ctx context.Context, project *supabasev1alpha1.SupabaseProject) error {
+	if r.Client == nil {
+		return fmt.Errorf("webhook client is not initialized")
+	}
+
+	dbSecret, err := r.getSecret(ctx, project, project.Spec.Database.SecretRef, "database")
+	if err != nil {
+		return err
+	}
+
+	storageSecret, err := r.getSecret(ctx, project, project.Spec.Storage.SecretRef, "storage")
+	if err != nil {
+		return err
+	}
+
+	if err := ensureSecretKeys(dbSecret, requiredDatabaseSecretKeys, "database"); err != nil {
+		return err
+	}
+
+	if err := ensureSecretKeys(storageSecret, requiredStorageSecretKeys, "storage"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *SupabaseProjectWebhook) getSecret(ctx context.Context, project *supabasev1alpha1.SupabaseProject, ref corev1.SecretReference, secretType string) (*corev1.Secret, error) {
+	namespace := ref.Namespace
+	if namespace == "" {
+		namespace = project.Namespace
+	}
+
+	var secret corev1.Secret
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: ref.Name}, &secret); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("%s secret '%s' not found", secretType, ref.Name)
+		}
+		return nil, fmt.Errorf("failed to fetch %s secret '%s': %w", secretType, ref.Name, err)
+	}
+
+	return &secret, nil
+}
+
+func ensureSecretKeys(secret *corev1.Secret, keys []string, secretType string) error {
+	if secret.Data == nil {
+		return fmt.Errorf("%s secret missing required key '%s'", secretType, keys[0])
+	}
+
+	for _, key := range keys {
+		value, ok := secret.Data[key]
+		if !ok || len(value) == 0 {
+			return fmt.Errorf("%s secret missing required key '%s'", secretType, key)
+		}
 	}
 
 	return nil
