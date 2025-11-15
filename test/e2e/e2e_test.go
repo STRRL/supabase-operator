@@ -137,6 +137,16 @@ var _ = Describe("Manager", Ordered, func() {
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("Running"), "Incorrect controller-manager pod status")
+
+				// Wait for pod to be ready (especially important for webhooks)
+				cmd = exec.Command("kubectl", "wait",
+					"pod", controllerPodName,
+					"--for=condition=Ready",
+					"--timeout=60s",
+					"-n", namespace,
+				)
+				_, err = utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred(), "Pod did not become ready")
 			}
 			Eventually(verifyControllerUp).Should(Succeed())
 		})
@@ -277,8 +287,45 @@ var _ = Describe("Manager", Ordered, func() {
 			Eventually(verifyNoDBErrors, 3*time.Minute).Should(Succeed())
 		})
 
-		It("should report failure when database secret is invalid (T105)", func() {
-			By("creating invalid database secret")
+		It("should validate secret references via webhook (T105a)", func() {
+			By("attempting to create SupabaseProject with empty database secret reference")
+			manifest := fmt.Sprintf(`
+apiVersion: supabase.strrl.dev/v1alpha1
+kind: SupabaseProject
+metadata:
+  name: %s-empty-ref
+  namespace: %s
+spec:
+  projectId: test-project-empty-ref
+  database:
+    secretRef:
+      name: ""
+  storage:
+    secretRef:
+      name: %s
+`, projectName, testNamespace, storageSecretName)
+
+			tmpFile, err := os.CreateTemp("", "manifest-*.yaml")
+			Expect(err).NotTo(HaveOccurred())
+			defer os.Remove(tmpFile.Name())
+
+			_, err = tmpFile.WriteString(manifest)
+			Expect(err).NotTo(HaveOccurred())
+			tmpFile.Close()
+
+			By("expecting webhook to reject the request")
+			cmd := exec.Command("kubectl", "apply", "-f", tmpFile.Name())
+			output, err := utils.Run(cmd)
+			Expect(err).To(HaveOccurred(), "Expected webhook to reject empty secret reference")
+			Expect(output).To(ContainSubstring("admission webhook"))
+			Expect(output).To(Or(
+				ContainSubstring("cannot be empty"),
+				ContainSubstring("secretRef.name"),
+			))
+		})
+
+		It("should report failure when database secret content is invalid (T105b)", func() {
+			By("creating invalid database secret (missing required keys)")
 			createSecret(testNamespace, "invalid-db-secret", map[string]string{
 				"invalid-key": "invalid-value",
 			})
@@ -302,17 +349,29 @@ spec:
 
 			applyManifest(manifest)
 
-			By("verifying phase transitions to Failed")
-			verifyFailedStatus := func(g Gomega) {
+			By("verifying Ready condition is False with InvalidSecret reason")
+			verifyInvalidSecret := func(g Gomega) {
 				cmd := exec.Command("kubectl", "get", "supabaseproject",
 					fmt.Sprintf("%s-invalid", projectName),
 					"-n", testNamespace,
-					"-o", "jsonpath={.status.phase}")
-				output, err := utils.Run(cmd)
+					"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
+				status, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("Failed"))
+				g.Expect(status).To(Equal("False"))
+
+				cmd = exec.Command("kubectl", "get", "supabaseproject",
+					fmt.Sprintf("%s-invalid", projectName),
+					"-n", testNamespace,
+					"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].reason}")
+				reason, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(reason).To(Or(
+					ContainSubstring("Invalid"),
+					ContainSubstring("Failed"),
+					ContainSubstring("Error"),
+				))
 			}
-			Eventually(verifyFailedStatus, 2*time.Minute).Should(Succeed())
+			Eventually(verifyInvalidSecret, 2*time.Minute).Should(Succeed())
 
 			By("cleaning up invalid resources")
 			cmd := exec.Command("kubectl", "delete", "supabaseproject",

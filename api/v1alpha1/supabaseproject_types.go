@@ -60,6 +60,9 @@ type DatabaseConfig struct {
 	//
 	// Recommended: Use the "postgres" or "supabase_admin" user from supabase/postgres image.
 	//
+	// Note: The admission webhook validates that secretRef.name is not empty (format validation).
+	// The controller validates secret existence and required keys (content validation).
+	//
 	// +kubebuilder:validation:Required
 	SecretRef corev1.SecretReference `json:"secretRef"`
 
@@ -75,6 +78,18 @@ type DatabaseConfig struct {
 }
 
 type StorageConfig struct {
+	// SecretRef references a Secret containing S3-compatible object storage credentials.
+	//
+	// The Secret must contain the following keys:
+	//   - endpoint: S3-compatible endpoint URL (e.g., https://minio.default.svc.cluster.local:9000)
+	//   - region: Storage region (e.g., us-east-1)
+	//   - bucket: Bucket name for storing files (e.g., supabase-storage)
+	//   - accessKeyId: S3 access key ID (camelCase)
+	//   - secretAccessKey: S3 secret access key (camelCase)
+	//
+	// Note: The admission webhook validates that secretRef.name is not empty (format validation).
+	// The controller validates secret existence and required keys (content validation).
+	//
 	// +kubebuilder:validation:Required
 	SecretRef corev1.SecretReference `json:"secretRef"`
 

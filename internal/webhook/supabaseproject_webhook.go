@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -96,34 +95,12 @@ func (r *SupabaseProjectWebhook) ValidateCreate(ctx context.Context, obj runtime
 		return nil, fmt.Errorf("expected SupabaseProject, got %T", obj)
 	}
 
-	if err := r.validateSecretExists(ctx, project.Namespace, project.Spec.Database.SecretRef.Name); err != nil {
-		return nil, fmt.Errorf("database secret '%s' not found", project.Spec.Database.SecretRef.Name)
+	// Validate secret references (format only, not existence or content)
+	if err := r.validateSecretReferences(project); err != nil {
+		return nil, err
 	}
 
-	if err := r.validateSecretExists(ctx, project.Namespace, project.Spec.Storage.SecretRef.Name); err != nil {
-		return nil, fmt.Errorf("storage secret '%s' not found", project.Spec.Storage.SecretRef.Name)
-	}
-
-	dbSecret := &corev1.Secret{}
-	if err := r.Client.Get(ctx, client.ObjectKey{
-		Namespace: project.Namespace,
-		Name:      project.Spec.Database.SecretRef.Name,
-	}, dbSecret); err == nil {
-		if err := r.validateDatabaseSecretKeys(dbSecret); err != nil {
-			return nil, err
-		}
-	}
-
-	storageSecret := &corev1.Secret{}
-	if err := r.Client.Get(ctx, client.ObjectKey{
-		Namespace: project.Namespace,
-		Name:      project.Spec.Storage.SecretRef.Name,
-	}, storageSecret); err == nil {
-		if err := r.validateStorageSecretKeys(storageSecret); err != nil {
-			return nil, err
-		}
-	}
-
+	// Validate image references
 	if err := r.validateImages(project); err != nil {
 		return nil, err
 	}
@@ -139,31 +116,18 @@ func (r *SupabaseProjectWebhook) ValidateDelete(ctx context.Context, obj runtime
 	return nil, nil
 }
 
-func (r *SupabaseProjectWebhook) validateSecretExists(ctx context.Context, namespace, name string) error {
-	secret := &corev1.Secret{}
-	return r.Client.Get(ctx, client.ObjectKey{
-		Namespace: namespace,
-		Name:      name,
-	}, secret)
-}
-
-func (r *SupabaseProjectWebhook) validateDatabaseSecretKeys(secret *corev1.Secret) error {
-	requiredKeys := []string{"host", "port", "database", "username", "password"}
-	for _, key := range requiredKeys {
-		if _, ok := secret.Data[key]; !ok {
-			return fmt.Errorf("database secret missing required key '%s'", key)
-		}
+// validateSecretReferences validates the format of secret references (not their existence or content)
+func (r *SupabaseProjectWebhook) validateSecretReferences(project *supabasev1alpha1.SupabaseProject) error {
+	// Validate database secret reference
+	if project.Spec.Database.SecretRef.Name == "" {
+		return fmt.Errorf("database.secretRef.name cannot be empty")
 	}
-	return nil
-}
 
-func (r *SupabaseProjectWebhook) validateStorageSecretKeys(secret *corev1.Secret) error {
-	requiredKeys := []string{"endpoint", "region", "bucket", "accessKeyId", "secretAccessKey"}
-	for _, key := range requiredKeys {
-		if _, ok := secret.Data[key]; !ok {
-			return fmt.Errorf("storage secret missing required key '%s'", key)
-		}
+	// Validate storage secret reference
+	if project.Spec.Storage.SecretRef.Name == "" {
+		return fmt.Errorf("storage.secretRef.name cannot be empty")
 	}
+
 	return nil
 }
 
