@@ -204,6 +204,12 @@ ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
 GOLANGCI_LINT_VERSION ?= v2.4.0
 
+.PHONY: clean-tools
+clean-tools: ## Remove all downloaded tools from bin/ directory.
+	@echo "Removing all tools from $(LOCALBIN)..."
+	@rm -rf $(LOCALBIN)/*
+	@echo "Tools removed. Run 'make <tool-name>' to reinstall."
+
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
