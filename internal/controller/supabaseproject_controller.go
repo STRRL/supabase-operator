@@ -11,13 +11,15 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	supabasev1alpha1 "github.com/strrl/supabase-operator/api/v1alpha1"
-	"github.com/strrl/supabase-operator/internal/resources"
+	"github.com/strrl/supabase-operator/internal/component"
+	"github.com/strrl/supabase-operator/internal/controller/reconciler"
 	"github.com/strrl/supabase-operator/internal/secrets"
 	"github.com/strrl/supabase-operator/internal/status"
 )
@@ -32,7 +34,8 @@ const (
 
 type SupabaseProjectReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=supabase.strrl.dev,resources=supabaseprojects,verbs=get;list;watch;create;update;patch;delete
@@ -82,6 +85,7 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if project.Status.Phase == "" {
 		project.Status.Phase = status.PhasePending
 		project.Status.Message = status.GetPhaseMessage(status.PhasePending)
+		r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessagePhasePending)
 	}
 
 	project.Status.Conditions = status.SetCondition(
@@ -97,33 +101,40 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			project.Status.Conditions,
 			status.NewReadyCondition(metav1.ConditionFalse, "DependencyValidationFailed", err.Error()),
 		)
+		r.Recorder.Eventf(project, corev1.EventTypeWarning, EventReasonValidationFailed, EventMessageDependencyValidationFailedFmt, err)
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonDependenciesValidated, EventMessageDependenciesValidated)
 
 	// Generate JWT secrets first (needed by database init job)
 	project.Status.Phase = status.PhaseDeployingSecrets
 	project.Status.Message = status.GetPhaseMessage(status.PhaseDeployingSecrets)
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessageDeployingSecrets)
 
 	if err := r.ensureJWTSecrets(ctx, project); err != nil {
 		logger.Error(err, "Failed to ensure JWT secrets")
 		project.Status.Phase = status.PhaseFailed
 		project.Status.Message = fmt.Sprintf("Secret generation failed: %v", err)
+		r.Recorder.Eventf(project, corev1.EventTypeWarning, EventReasonSecretsFailed, EventMessageSecretsFailedFmt, err)
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
 			return ctrl.Result{}, updateErr
 		}
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonSecretsCreated, EventMessageSecretsCreated)
 
 	// Initialize database with required extensions and roles via Kubernetes Job
 	project.Status.Phase = status.PhaseInitializingDatabase
 	project.Status.Message = status.GetPhaseMessage(status.PhaseInitializingDatabase)
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessageInitializingDatabase)
 
 	jobResult, err := r.ensureDatabaseInitJob(ctx, project)
 	if err != nil {
 		logger.Error(err, "Failed to ensure database init job")
+		r.Recorder.Eventf(project, corev1.EventTypeWarning, EventReasonDatabaseInitFailed, EventMessageDatabaseInitFailedFmt, err)
 		project.Status.Phase = status.PhaseFailed
 		project.Status.Message = fmt.Sprintf("Database initialization job failed: %v", err)
 		if updateErr := r.Status().Update(ctx, project); updateErr != nil {
@@ -139,8 +150,10 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		return jobResult, nil
 	}
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonDatabaseInitialized, EventMessageDatabaseInitialized)
 
 	project.Status.Phase = status.PhaseDeployingComponents
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessageDeployingComponents)
 
 	componentsStatus, err := r.reconcileAllComponents(ctx, project)
 	if err != nil {
@@ -158,6 +171,7 @@ func (r *SupabaseProjectReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		project.Status.Conditions,
 		status.NewProgressingCondition(metav1.ConditionFalse, "ReconciliationComplete", "Reconciliation complete"),
 	)
+	r.Recorder.Event(project, corev1.EventTypeNormal, EventReasonPhaseChanged, EventMessageSupabaseProjectRunning)
 	project.Status.ObservedGeneration = project.Generation
 	now := metav1.Now()
 	project.Status.LastReconcileTime = &now
@@ -177,8 +191,12 @@ func (r *SupabaseProjectReconciler) reconcileAllComponents(ctx context.Context, 
 	logger := log.FromContext(ctx)
 	componentsStatus := supabasev1alpha1.ComponentsStatus{}
 
-	// Create Kong ConfigMap
-	kongConfigMap := resources.BuildKongConfigMap(project)
+	componentReconciler := &reconciler.ComponentReconciler{
+		Client: r.Client,
+		Scheme: r.Scheme,
+	}
+
+	kongConfigMap := component.BuildKongConfigMap(project)
 	if err := controllerutil.SetControllerReference(project, kongConfigMap, r.Scheme); err != nil {
 		return componentsStatus, err
 	}
@@ -190,82 +208,117 @@ func (r *SupabaseProjectReconciler) reconcileAllComponents(ctx context.Context, 
 		}
 	}
 
-	if err := r.reconcileComponent(ctx, project, "kong", resources.BuildKongDeployment, resources.BuildKongService); err != nil {
+	if err := componentReconciler.ReconcileComponent(ctx, project, &component.KongBuilder{}); err != nil {
 		logger.Error(err, "Failed to reconcile Kong")
 		return componentsStatus, err
 	}
-	kongImage := "kong:2.8.1"
-	if project.Spec.Kong != nil && project.Spec.Kong.Image != "" {
-		kongImage = project.Spec.Kong.Image
+	kongDeploy := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: project.Namespace, Name: project.Name + "-kong"}, kongDeploy); err != nil {
+		logger.Error(err, "Failed to get Kong deployment status")
+	} else {
+		replicas := int32(0)
+		if kongDeploy.Spec.Replicas != nil {
+			replicas = *kongDeploy.Spec.Replicas
+		}
+		componentsStatus = status.SetComponentStatus(componentsStatus, "Kong",
+			status.NewComponentStatus(status.PhaseRunning, project.Spec.Kong.Image, replicas, kongDeploy.Status.ReadyReplicas))
 	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "Kong",
-		status.NewComponentStatus(status.PhaseRunning, kongImage, 1, 1))
 
-	if err := r.reconcileComponent(ctx, project, "auth", resources.BuildAuthDeployment, resources.BuildAuthService); err != nil {
+	if err := componentReconciler.ReconcileComponent(ctx, project, &component.AuthBuilder{}); err != nil {
 		logger.Error(err, "Failed to reconcile Auth")
 		return componentsStatus, err
 	}
-	authImage := "supabase/gotrue:v2.180.0"
-	if project.Spec.Auth != nil && project.Spec.Auth.Image != "" {
-		authImage = project.Spec.Auth.Image
+	authDeploy := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: project.Namespace, Name: project.Name + "-auth"}, authDeploy); err != nil {
+		logger.Error(err, "Failed to get Auth deployment status")
+	} else {
+		replicas := int32(0)
+		if authDeploy.Spec.Replicas != nil {
+			replicas = *authDeploy.Spec.Replicas
+		}
+		componentsStatus = status.SetComponentStatus(componentsStatus, "Auth",
+			status.NewComponentStatus(status.PhaseRunning, project.Spec.Auth.Image, replicas, authDeploy.Status.ReadyReplicas))
 	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "Auth",
-		status.NewComponentStatus(status.PhaseRunning, authImage, 1, 1))
 
-	if err := r.reconcileComponent(ctx, project, "postgrest", resources.BuildPostgRESTDeployment, resources.BuildPostgRESTService); err != nil {
+	if err := componentReconciler.ReconcileComponent(ctx, project, &component.PostgRESTBuilder{}); err != nil {
 		logger.Error(err, "Failed to reconcile PostgREST")
 		return componentsStatus, err
 	}
-	postgrestImage := "postgrest/postgrest:v13.0.7"
-	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Image != "" {
-		postgrestImage = project.Spec.PostgREST.Image
+	postgrestDeploy := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: project.Namespace, Name: project.Name + "-postgrest"}, postgrestDeploy); err != nil {
+		logger.Error(err, "Failed to get PostgREST deployment status")
+	} else {
+		replicas := int32(0)
+		if postgrestDeploy.Spec.Replicas != nil {
+			replicas = *postgrestDeploy.Spec.Replicas
+		}
+		componentsStatus = status.SetComponentStatus(componentsStatus, "PostgREST",
+			status.NewComponentStatus(status.PhaseRunning, project.Spec.PostgREST.Image, replicas, postgrestDeploy.Status.ReadyReplicas))
 	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "PostgREST",
-		status.NewComponentStatus(status.PhaseRunning, postgrestImage, 1, 1))
 
-	if err := r.reconcileComponent(ctx, project, "realtime", resources.BuildRealtimeDeployment, resources.BuildRealtimeService); err != nil {
+	if err := componentReconciler.ReconcileComponent(ctx, project, &component.RealtimeBuilder{}); err != nil {
 		logger.Error(err, "Failed to reconcile Realtime")
 		return componentsStatus, err
 	}
-	realtimeImage := "supabase/realtime:v2.51.11"
-	if project.Spec.Realtime != nil && project.Spec.Realtime.Image != "" {
-		realtimeImage = project.Spec.Realtime.Image
+	realtimeDeploy := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: project.Namespace, Name: project.Name + "-realtime"}, realtimeDeploy); err != nil {
+		logger.Error(err, "Failed to get Realtime deployment status")
+	} else {
+		replicas := int32(0)
+		if realtimeDeploy.Spec.Replicas != nil {
+			replicas = *realtimeDeploy.Spec.Replicas
+		}
+		componentsStatus = status.SetComponentStatus(componentsStatus, "Realtime",
+			status.NewComponentStatus(status.PhaseRunning, project.Spec.Realtime.Image, replicas, realtimeDeploy.Status.ReadyReplicas))
 	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "Realtime",
-		status.NewComponentStatus(status.PhaseRunning, realtimeImage, 1, 1))
 
-	if err := r.reconcileComponent(ctx, project, "storage", resources.BuildStorageDeployment, resources.BuildStorageService); err != nil {
+	if err := componentReconciler.ReconcileComponent(ctx, project, &component.StorageBuilder{}); err != nil {
 		logger.Error(err, "Failed to reconcile Storage")
 		return componentsStatus, err
 	}
-	storageImage := "supabase/storage-api:v1.28.0"
-	if project.Spec.StorageAPI != nil && project.Spec.StorageAPI.Image != "" {
-		storageImage = project.Spec.StorageAPI.Image
+	storageDeploy := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: project.Namespace, Name: project.Name + "-storage"}, storageDeploy); err != nil {
+		logger.Error(err, "Failed to get Storage deployment status")
+	} else {
+		replicas := int32(0)
+		if storageDeploy.Spec.Replicas != nil {
+			replicas = *storageDeploy.Spec.Replicas
+		}
+		componentsStatus = status.SetComponentStatus(componentsStatus, "StorageAPI",
+			status.NewComponentStatus(status.PhaseRunning, project.Spec.StorageAPI.Image, replicas, storageDeploy.Status.ReadyReplicas))
 	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "StorageAPI",
-		status.NewComponentStatus(status.PhaseRunning, storageImage, 1, 1))
 
-	if err := r.reconcileComponent(ctx, project, "meta", resources.BuildMetaDeployment, resources.BuildMetaService); err != nil {
+	if err := componentReconciler.ReconcileComponent(ctx, project, &component.MetaBuilder{}); err != nil {
 		logger.Error(err, "Failed to reconcile Meta")
 		return componentsStatus, err
 	}
-	metaImage := "supabase/postgres-meta:v0.102.0"
-	if project.Spec.Meta != nil && project.Spec.Meta.Image != "" {
-		metaImage = project.Spec.Meta.Image
+	metaDeploy := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: project.Namespace, Name: project.Name + "-meta"}, metaDeploy); err != nil {
+		logger.Error(err, "Failed to get Meta deployment status")
+	} else {
+		replicas := int32(0)
+		if metaDeploy.Spec.Replicas != nil {
+			replicas = *metaDeploy.Spec.Replicas
+		}
+		componentsStatus = status.SetComponentStatus(componentsStatus, "Meta",
+			status.NewComponentStatus(status.PhaseRunning, project.Spec.Meta.Image, replicas, metaDeploy.Status.ReadyReplicas))
 	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "Meta",
-		status.NewComponentStatus(status.PhaseRunning, metaImage, 1, 1))
 
-	if err := r.reconcileComponent(ctx, project, "studio", resources.BuildStudioDeployment, resources.BuildStudioService); err != nil {
+	if err := componentReconciler.ReconcileComponent(ctx, project, &component.StudioBuilder{}); err != nil {
 		logger.Error(err, "Failed to reconcile Studio")
 		return componentsStatus, err
 	}
-	studioImage := "supabase/studio:2025.10.01-sha-8460121"
-	if project.Spec.Studio != nil && project.Spec.Studio.Image != "" {
-		studioImage = project.Spec.Studio.Image
+	studioDeploy := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: project.Namespace, Name: project.Name + "-studio"}, studioDeploy); err != nil {
+		logger.Error(err, "Failed to get Studio deployment status")
+	} else {
+		replicas := int32(0)
+		if studioDeploy.Spec.Replicas != nil {
+			replicas = *studioDeploy.Spec.Replicas
+		}
+		componentsStatus = status.SetComponentStatus(componentsStatus, "Studio",
+			status.NewComponentStatus(status.PhaseRunning, project.Spec.Studio.Image, replicas, studioDeploy.Status.ReadyReplicas))
 	}
-	componentsStatus = status.SetComponentStatus(componentsStatus, "Studio",
-		status.NewComponentStatus(status.PhaseRunning, studioImage, 1, 1))
 
 	return componentsStatus, nil
 }
@@ -319,7 +372,7 @@ func (r *SupabaseProjectReconciler) ensureDatabaseInitJob(ctx context.Context, p
 	logger := log.FromContext(ctx)
 
 	// Create ConfigMap with SQL scripts
-	configMap := resources.BuildDatabaseInitConfigMap(project)
+	configMap := component.BuildDatabaseInitConfigMap(project)
 	if err := controllerutil.SetControllerReference(project, configMap, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -334,7 +387,7 @@ func (r *SupabaseProjectReconciler) ensureDatabaseInitJob(ctx context.Context, p
 	}
 
 	// Create Job
-	job := resources.BuildDatabaseInitJob(project)
+	job := component.BuildDatabaseInitJob(project)
 	if err := controllerutil.SetControllerReference(project, job, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -439,56 +492,6 @@ func (r *SupabaseProjectReconciler) ensureJWTSecrets(ctx context.Context, projec
 	}
 
 	return r.Create(ctx, secret)
-}
-
-func (r *SupabaseProjectReconciler) reconcileComponent(
-	ctx context.Context,
-	project *supabasev1alpha1.SupabaseProject,
-	name string,
-	deploymentBuilder func(*supabasev1alpha1.SupabaseProject) *appsv1.Deployment,
-	serviceBuilder func(*supabasev1alpha1.SupabaseProject) *corev1.Service,
-) error {
-	deployment := deploymentBuilder(project)
-	if err := controllerutil.SetControllerReference(project, deployment, r.Scheme); err != nil {
-		return err
-	}
-
-	existingDeployment := &appsv1.Deployment{}
-	err := r.Get(ctx, client.ObjectKey{Namespace: deployment.Namespace, Name: deployment.Name}, existingDeployment)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			if err := r.Create(ctx, deployment); err != nil {
-				return fmt.Errorf("failed to create %s deployment: %w", name, err)
-			}
-		} else {
-			return err
-		}
-	} else {
-		// Update existing deployment
-		existingDeployment.Spec = deployment.Spec
-		if err := r.Update(ctx, existingDeployment); err != nil {
-			return fmt.Errorf("failed to update %s deployment: %w", name, err)
-		}
-	}
-
-	service := serviceBuilder(project)
-	if err := controllerutil.SetControllerReference(project, service, r.Scheme); err != nil {
-		return err
-	}
-
-	existingService := &corev1.Service{}
-	err = r.Get(ctx, client.ObjectKey{Namespace: service.Namespace, Name: service.Name}, existingService)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			if err := r.Create(ctx, service); err != nil {
-				return fmt.Errorf("failed to create %s service: %w", name, err)
-			}
-		} else {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (r *SupabaseProjectReconciler) handleDeletion(ctx context.Context, project *supabasev1alpha1.SupabaseProject) error {

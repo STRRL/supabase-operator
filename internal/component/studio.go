@@ -1,9 +1,10 @@
-package resources
+package component
 
 import (
 	"fmt"
 
 	"github.com/strrl/supabase-operator/api/v1alpha1"
+	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -11,13 +12,21 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func BuildStudioDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
+type StudioBuilder struct{}
+
+var _ ComponentBuilder = (*StudioBuilder)(nil)
+
+func (b *StudioBuilder) Name() string {
+	return "studio"
+}
+
+func (b *StudioBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv1.Deployment, error) {
 	replicas := int32(1)
 	if project.Spec.Studio != nil && project.Spec.Studio.Replicas > 0 {
 		replicas = project.Spec.Studio.Replicas
 	}
 
-	image := "supabase/studio:2025.10.01-sha-8460121"
+	image := webhook.DefaultStudioImage
 	if project.Spec.Studio != nil && project.Spec.Studio.Image != "" {
 		image = project.Spec.Studio.Image
 	}
@@ -149,10 +158,10 @@ func BuildStudioDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment
 		)
 	}
 
-	return deployment
+	return deployment, nil
 }
 
-func BuildStudioService(project *v1alpha1.SupabaseProject) *corev1.Service {
+func (b *StudioBuilder) BuildService(project *v1alpha1.SupabaseProject) (*corev1.Service, error) {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "studio",
 		"app.kubernetes.io/instance":   project.Name,
@@ -179,7 +188,7 @@ func BuildStudioService(project *v1alpha1.SupabaseProject) *corev1.Service {
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 func getStudioDefaultResources() corev1.ResourceRequirements {

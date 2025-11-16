@@ -16,6 +16,7 @@ const (
 	ConditionTypePostgRESTReady  = "PostgRESTReady"
 	ConditionTypeStorageAPIReady = "StorageAPIReady"
 	ConditionTypeMetaReady       = "MetaReady"
+	ConditionTypeStudioReady     = "StudioReady"
 
 	ConditionTypePostgreSQLConnected = "PostgreSQLConnected"
 	ConditionTypeS3Connected         = "S3Connected"

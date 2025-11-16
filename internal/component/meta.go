@@ -1,7 +1,8 @@
-package resources
+package component
 
 import (
 	"github.com/strrl/supabase-operator/api/v1alpha1"
+	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -9,13 +10,21 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func BuildMetaDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
+type MetaBuilder struct{}
+
+var _ ComponentBuilder = (*MetaBuilder)(nil)
+
+func (b *MetaBuilder) Name() string {
+	return "meta"
+}
+
+func (b *MetaBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv1.Deployment, error) {
 	replicas := int32(1)
 	if project.Spec.Meta != nil && project.Spec.Meta.Replicas > 0 {
 		replicas = project.Spec.Meta.Replicas
 	}
 
-	image := "supabase/postgres-meta:v0.91.6"
+	image := webhook.DefaultMetaImage
 	if project.Spec.Meta != nil && project.Spec.Meta.Image != "" {
 		image = project.Spec.Meta.Image
 	}
@@ -155,10 +164,10 @@ func BuildMetaDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		)
 	}
 
-	return deployment
+	return deployment, nil
 }
 
-func BuildMetaService(project *v1alpha1.SupabaseProject) *corev1.Service {
+func (b *MetaBuilder) BuildService(project *v1alpha1.SupabaseProject) (*corev1.Service, error) {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "meta",
 		"app.kubernetes.io/instance":   project.Name,
@@ -185,7 +194,7 @@ func BuildMetaService(project *v1alpha1.SupabaseProject) *corev1.Service {
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 func getMetaDefaultResources() corev1.ResourceRequirements {

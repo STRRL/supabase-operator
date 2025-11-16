@@ -1,9 +1,8 @@
-package resources
+package component
 
 import (
-	"fmt"
-
 	"github.com/strrl/supabase-operator/api/v1alpha1"
+	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -11,26 +10,34 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func BuildRealtimeDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
+type PostgRESTBuilder struct{}
+
+var _ ComponentBuilder = (*PostgRESTBuilder)(nil)
+
+func (b *PostgRESTBuilder) Name() string {
+	return "postgrest"
+}
+
+func (b *PostgRESTBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv1.Deployment, error) {
 	replicas := int32(1)
-	if project.Spec.Realtime != nil && project.Spec.Realtime.Replicas > 0 {
-		replicas = project.Spec.Realtime.Replicas
+	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Replicas > 0 {
+		replicas = project.Spec.PostgREST.Replicas
 	}
 
-	image := "supabase/realtime:v2.51.11"
-	if project.Spec.Realtime != nil && project.Spec.Realtime.Image != "" {
-		image = project.Spec.Realtime.Image
+	image := webhook.DefaultPostgRESTImage
+	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Image != "" {
+		image = project.Spec.PostgREST.Image
 	}
 
-	resources := getRealtimeDefaultResources()
-	if project.Spec.Realtime != nil && project.Spec.Realtime.Resources != nil {
-		resources = *project.Spec.Realtime.Resources
+	resources := getPostgRESTDefaultResources()
+	if project.Spec.PostgREST != nil && project.Spec.PostgREST.Resources != nil {
+		resources = *project.Spec.PostgREST.Resources
 	}
 
 	labels := map[string]string{
-		"app.kubernetes.io/name":       "realtime",
+		"app.kubernetes.io/name":       "postgrest",
 		"app.kubernetes.io/instance":   project.Name,
-		"app.kubernetes.io/component":  "realtime",
+		"app.kubernetes.io/component":  "rest-api",
 		"app.kubernetes.io/part-of":    "supabase",
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
@@ -76,17 +83,6 @@ func BuildRealtimeDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployme
 			},
 		},
 		{
-			Name: "DB_USER",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: project.Spec.Database.SecretRef.Name,
-					},
-					Key: "username",
-				},
-			},
-		},
-		{
 			Name: "DB_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
@@ -98,11 +94,11 @@ func BuildRealtimeDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployme
 			},
 		},
 		{
-			Name:  "DATABASE_URL",
-			Value: fmt.Sprintf("postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=%s", sslMode),
+			Name:  "PGRST_DB_URI",
+			Value: "postgres://authenticator:$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=" + sslMode,
 		},
 		{
-			Name: "JWT_SECRET",
+			Name: "PGRST_JWT_SECRET",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -113,37 +109,26 @@ func BuildRealtimeDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployme
 			},
 		},
 		{
-			Name: "SECRET_KEY_BASE",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: project.Name + "-jwt",
-					},
-					Key: "jwt-secret",
-				},
-			},
-		},
-		{
-			Name:  "APP_NAME",
-			Value: "realtime",
-		},
-		{
-			Name:  "PORT",
-			Value: "4000",
-		},
-		{
-			Name:  "RLIMIT_NOFILE",
-			Value: "10000",
-		},
-		{
-			Name:  "SECURE_CHANNELS",
+			Name:  "PGRST_JWT_SECRET_IS_BASE64",
 			Value: "true",
+		},
+		{
+			Name:  "PGRST_DB_ANON_ROLE",
+			Value: "anon",
+		},
+		{
+			Name:  "PGRST_DB_SCHEMA",
+			Value: "public",
+		},
+		{
+			Name:  "PGRST_DB_EXTRA_SEARCH_PATH",
+			Value: "public",
 		},
 	}
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      project.Name + "-realtime",
+			Name:      project.Name + "-postgrest",
 			Namespace: project.Namespace,
 			Labels:    labels,
 		},
@@ -159,14 +144,14 @@ func BuildRealtimeDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployme
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:      "realtime",
+							Name:      "postgrest",
 							Image:     image,
 							Resources: resources,
 							Env:       env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
-									ContainerPort: 4000,
+									ContainerPort: 3000,
 									Protocol:      corev1.ProtocolTCP,
 								},
 							},
@@ -177,28 +162,28 @@ func BuildRealtimeDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployme
 		},
 	}
 
-	if project.Spec.Realtime != nil && len(project.Spec.Realtime.ExtraEnv) > 0 {
+	if project.Spec.PostgREST != nil && len(project.Spec.PostgREST.ExtraEnv) > 0 {
 		deployment.Spec.Template.Spec.Containers[0].Env = append(
 			deployment.Spec.Template.Spec.Containers[0].Env,
-			project.Spec.Realtime.ExtraEnv...,
+			project.Spec.PostgREST.ExtraEnv...,
 		)
 	}
 
-	return deployment
+	return deployment, nil
 }
 
-func BuildRealtimeService(project *v1alpha1.SupabaseProject) *corev1.Service {
+func (b *PostgRESTBuilder) BuildService(project *v1alpha1.SupabaseProject) (*corev1.Service, error) {
 	labels := map[string]string{
-		"app.kubernetes.io/name":       "realtime",
+		"app.kubernetes.io/name":       "postgrest",
 		"app.kubernetes.io/instance":   project.Name,
-		"app.kubernetes.io/component":  "realtime",
+		"app.kubernetes.io/component":  "rest-api",
 		"app.kubernetes.io/part-of":    "supabase",
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      project.Name + "-realtime",
+			Name:      project.Name + "-postgrest",
 			Namespace: project.Namespace,
 			Labels:    labels,
 		},
@@ -208,16 +193,16 @@ func BuildRealtimeService(project *v1alpha1.SupabaseProject) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "http",
-					Port:       4000,
-					TargetPort: intstr.FromInt(4000),
+					Port:       3000,
+					TargetPort: intstr.FromInt(3000),
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
 		},
-	}
+	}, nil
 }
 
-func getRealtimeDefaultResources() corev1.ResourceRequirements {
+func getPostgRESTDefaultResources() corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceMemory: resource.MustParse("128Mi"),

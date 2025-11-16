@@ -40,7 +40,7 @@ As a platform administrator, I want to deploy multiple isolated Supabase instanc
 ### Edge Cases
 - When external PostgreSQL becomes unavailable, the operator marks PostgreSQLConnected condition as False and enters reconciliation retry with exponential backoff
 - System handles partial deployment failures by maintaining per-component status tracking, allowing healthy components to continue running while failed components retry
-- When required secrets or credentials are missing, the operator blocks deployment and sets SecretsReady condition to False with descriptive error message
+- When required secrets or credentials are missing or invalid, the system uses layered validation: admission webhook immediately rejects requests with malformed secret references (empty secretRef.name, invalid image format); controller validates secret existence and content during reconciliation and reports errors via SecretsReady condition with descriptive error message
 - Operator handles version upgrades through rolling updates: updating one component at a time with health checks between updates (users trigger upgrades by modifying component `image` field in SupabaseProject spec). If schema migration conflicts are detected due to manual user changes, operator blocks upgrade and sets condition with descriptive error requiring manual schema resolution before proceeding
 - When resource limits are exceeded during deployment, Kubernetes OOMKills the pod, operator detects via pod status and reports in component condition
 - System detects degraded state through health check endpoints, pod restart counts, and readiness probes, updating Degraded condition accordingly
@@ -67,6 +67,7 @@ As a platform administrator, I want to deploy multiple isolated Supabase instanc
 - **FR-016**: System MUST track deployment phase per component (e.g., Kong:ValidatingDeps, Auth:Deploying, Realtime:Running) with phases including: ValidatingDependencies, Deploying, Configuring, Running, Failed, and Updating
 - **FR-017**: System MUST handle PostgreSQL database initialization including creating the dedicated database (if it does not exist), required schemas (auth, storage, realtime), roles (authenticator, anon, service_role), and extensions (pgcrypto, pgjwt, uuid-ossp, pg_stat_statements) for Supabase components within that isolated database
 - **FR-018**: System MUST watch referenced Secrets for external dependency credentials (PostgreSQL, S3) and automatically trigger rolling restart of affected components when credential values change to ensure components pick up updated credentials
+- **FR-019**: System MUST implement layered validation for SupabaseProject resources: admission webhook validates static/format constraints (secretRef.name not empty, image format) and rejects invalid requests at admission time; controller validates dynamic/runtime state (secret existence, secret content, dependency connectivity) and reports errors via status conditions during reconciliation
 
 ### Non-Functional Requirements
 - **NFR-001 (Performance)**: Reconciliation loop MUST complete within 5 seconds for warm cache scenarios, defined as: all Kubernetes resources already exist in cluster, container images already pulled on nodes, Kubernetes client cache populated, and no external dependency validation required (PostgreSQL/S3 already verified)

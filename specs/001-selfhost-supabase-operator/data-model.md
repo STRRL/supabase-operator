@@ -276,15 +276,45 @@ type EndpointsStatus struct {
 
 ## Validation Rules
 
+### Layered Validation Strategy
+
+The operator implements **layered validation** to provide fast feedback and detailed error reporting:
+
+**Admission Webhook (Static/Format Validation)**:
+- Validates at admission time (before resource is persisted)
+- Checks format and structural constraints only
+- Rejects invalid requests immediately with clear error messages
+- Validations performed:
+  - `secretRef.name` must not be empty (for database and storage)
+  - Image references must include tag (e.g., `kong:2.8.1`)
+  - Image references must not contain spaces
+  - Component replicas must be between 0-10
+
+**Controller (Dynamic/Runtime Validation)**:
+- Validates during reconciliation loop
+- Checks existence and content of resources
+- Reports errors via status conditions
+- Validations performed:
+  - Secrets must exist in the cluster
+  - Secrets must contain all required keys
+  - Database connectivity and credentials
+  - S3 connectivity and credentials
+
 ### Field Validations
+
+**Static (Webhook)**:
 - `projectId`: Required, must be DNS-1123 compliant
-- `database.secretRef`: Required, must reference existing secret
-- `storage.secretRef`: Required, must reference existing secret
-- Component images: Must be valid container image references
-- Resource requirements: Must be valid Kubernetes resource quantities
+- `database.secretRef.name`: Required, must not be empty
+- `storage.secretRef.name`: Required, must not be empty
+- Component images: Must include tag, no spaces
 - Replicas: Minimum 0, maximum 10
 
-### Secret Key Conventions (validated in controller/webhook)
+**Dynamic (Controller)**:
+- `database.secretRef`: Secret must exist and contain required keys
+- `storage.secretRef`: Secret must exist and contain required keys
+- Resource requirements: Must be valid Kubernetes resource quantities
+
+### Secret Key Conventions (validated in controller)
 **Database Secret Keys**:
 - `host`: PostgreSQL host (required)
 - `port`: PostgreSQL port (required)
@@ -305,12 +335,6 @@ type EndpointsStatus struct {
 - `username`: SMTP username
 - `password`: SMTP password
 - `from`: From address
-
-### Cross-field Validations (via webhook)
-- Secrets must exist in the same namespace
-- Required secret keys must be present
-- Resource limits must be greater than or equal to requests
-- Component replicas must be 1 if not explicitly configured for HA
 
 ## State Transitions
 

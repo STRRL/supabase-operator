@@ -1,0 +1,27 @@
+# This configuration is for teaching kustomize how to update name ref and var substitution
+nameReference:
+- kind: Certificate
+  group: cert-manager.io
+  fieldSpecs:
+  - kind: MutatingWebhookConfiguration
+    group: admissionregistration.k8s.io
+    path: metadata/annotations/cert-manager.io~1inject-ca-from
+  - kind: ValidatingWebhookConfiguration
+    group: admissionregistration.k8s.io
+    path: metadata/annotations/cert-manager.io~1inject-ca-from
+- kind: Issuer
+  group: cert-manager.io
+  fieldSpecs:
+  - kind: Certificate
+    group: cert-manager.io
+    path: spec/issuerRef/name
+
+namespace:
+- kind: Certificate
+  group: cert-manager.io
+  path: metadata/namespace
+  create: true
+- kind: Issuer
+  group: cert-manager.io
+  path: metadata/namespace
+  create: true

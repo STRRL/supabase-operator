@@ -1,7 +1,10 @@
-package resources
+package component
 
 import (
+	"fmt"
+
 	"github.com/strrl/supabase-operator/api/v1alpha1"
+	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -9,26 +12,34 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
+type RealtimeBuilder struct{}
+
+var _ ComponentBuilder = (*RealtimeBuilder)(nil)
+
+func (b *RealtimeBuilder) Name() string {
+	return "realtime"
+}
+
+func (b *RealtimeBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv1.Deployment, error) {
 	replicas := int32(1)
-	if project.Spec.Auth != nil && project.Spec.Auth.Replicas > 0 {
-		replicas = project.Spec.Auth.Replicas
+	if project.Spec.Realtime != nil && project.Spec.Realtime.Replicas > 0 {
+		replicas = project.Spec.Realtime.Replicas
 	}
 
-	image := "supabase/gotrue:v2.180.0"
-	if project.Spec.Auth != nil && project.Spec.Auth.Image != "" {
-		image = project.Spec.Auth.Image
+	image := webhook.DefaultRealtimeImage
+	if project.Spec.Realtime != nil && project.Spec.Realtime.Image != "" {
+		image = project.Spec.Realtime.Image
 	}
 
-	resources := getAuthDefaultResources()
-	if project.Spec.Auth != nil && project.Spec.Auth.Resources != nil {
-		resources = *project.Spec.Auth.Resources
+	resources := getRealtimeDefaultResources()
+	if project.Spec.Realtime != nil && project.Spec.Realtime.Resources != nil {
+		resources = *project.Spec.Realtime.Resources
 	}
 
 	labels := map[string]string{
-		"app.kubernetes.io/name":       "auth",
+		"app.kubernetes.io/name":       "realtime",
 		"app.kubernetes.io/instance":   project.Name,
-		"app.kubernetes.io/component":  "authentication",
+		"app.kubernetes.io/component":  "realtime",
 		"app.kubernetes.io/part-of":    "supabase",
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
@@ -40,22 +51,6 @@ func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 	}
 
 	env := []corev1.EnvVar{
-		{
-			Name:  "API_EXTERNAL_URL",
-			Value: "http://localhost:8000",
-		},
-		{
-			Name:  "GOTRUE_SITE_URL",
-			Value: "http://localhost:8000",
-		},
-		{
-			Name:  "GOTRUE_API_PORT",
-			Value: "9999",
-		},
-		{
-			Name:  "GOTRUE_DB_DRIVER",
-			Value: "postgres",
-		},
 		{
 			Name: "DB_HOST",
 			ValueFrom: &corev1.EnvVarSource{
@@ -112,15 +107,11 @@ func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 			},
 		},
 		{
-			Name:  "DB_SSL_MODE",
-			Value: sslMode,
+			Name:  "DATABASE_URL",
+			Value: fmt.Sprintf("postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=%s", sslMode),
 		},
 		{
-			Name:  "GOTRUE_DB_DATABASE_URL",
-			Value: "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSL_MODE)",
-		},
-		{
-			Name: "GOTRUE_JWT_SECRET",
+			Name: "JWT_SECRET",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -131,30 +122,37 @@ func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 			},
 		},
 		{
-			Name:  "GOTRUE_JWT_EXP",
-			Value: "3600",
+			Name: "SECRET_KEY_BASE",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "jwt-secret",
+				},
+			},
 		},
 		{
-			Name:  "GOTRUE_JWT_DEFAULT_GROUP_NAME",
-			Value: "authenticated",
+			Name:  "APP_NAME",
+			Value: "realtime",
 		},
 		{
-			Name:  "GOTRUE_DISABLE_SIGNUP",
-			Value: "false",
+			Name:  "PORT",
+			Value: "4000",
 		},
 		{
-			Name:  "GOTRUE_EXTERNAL_EMAIL_ENABLED",
-			Value: "true",
+			Name:  "RLIMIT_NOFILE",
+			Value: "10000",
 		},
 		{
-			Name:  "GOTRUE_MAILER_AUTOCONFIRM",
+			Name:  "SECURE_CHANNELS",
 			Value: "true",
 		},
 	}
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      project.Name + "-auth",
+			Name:      project.Name + "-realtime",
 			Namespace: project.Namespace,
 			Labels:    labels,
 		},
@@ -170,14 +168,14 @@ func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:      "auth",
+							Name:      "realtime",
 							Image:     image,
 							Resources: resources,
 							Env:       env,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
-									ContainerPort: 9999,
+									ContainerPort: 4000,
 									Protocol:      corev1.ProtocolTCP,
 								},
 							},
@@ -188,28 +186,28 @@ func BuildAuthDeployment(project *v1alpha1.SupabaseProject) *appsv1.Deployment {
 		},
 	}
 
-	if project.Spec.Auth != nil && len(project.Spec.Auth.ExtraEnv) > 0 {
+	if project.Spec.Realtime != nil && len(project.Spec.Realtime.ExtraEnv) > 0 {
 		deployment.Spec.Template.Spec.Containers[0].Env = append(
 			deployment.Spec.Template.Spec.Containers[0].Env,
-			project.Spec.Auth.ExtraEnv...,
+			project.Spec.Realtime.ExtraEnv...,
 		)
 	}
 
-	return deployment
+	return deployment, nil
 }
 
-func BuildAuthService(project *v1alpha1.SupabaseProject) *corev1.Service {
+func (b *RealtimeBuilder) BuildService(project *v1alpha1.SupabaseProject) (*corev1.Service, error) {
 	labels := map[string]string{
-		"app.kubernetes.io/name":       "auth",
+		"app.kubernetes.io/name":       "realtime",
 		"app.kubernetes.io/instance":   project.Name,
-		"app.kubernetes.io/component":  "authentication",
+		"app.kubernetes.io/component":  "realtime",
 		"app.kubernetes.io/part-of":    "supabase",
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      project.Name + "-auth",
+			Name:      project.Name + "-realtime",
 			Namespace: project.Namespace,
 			Labels:    labels,
 		},
@@ -219,24 +217,24 @@ func BuildAuthService(project *v1alpha1.SupabaseProject) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "http",
-					Port:       9999,
-					TargetPort: intstr.FromInt(9999),
+					Port:       4000,
+					TargetPort: intstr.FromInt(4000),
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
 		},
-	}
+	}, nil
 }
 
-func getAuthDefaultResources() corev1.ResourceRequirements {
+func getRealtimeDefaultResources() corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse("64Mi"),
-			corev1.ResourceCPU:    resource.MustParse("50m"),
-		},
-		Limits: corev1.ResourceList{
 			corev1.ResourceMemory: resource.MustParse("128Mi"),
 			corev1.ResourceCPU:    resource.MustParse("100m"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
+			corev1.ResourceCPU:    resource.MustParse("200m"),
 		},
 	}
 }

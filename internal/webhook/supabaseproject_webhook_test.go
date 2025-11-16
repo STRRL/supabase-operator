@@ -1,4 +1,4 @@
-package v1alpha1
+package webhook
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	supabasev1alpha1 "github.com/strrl/supabase-operator/api/v1alpha1"
 )
 
 // Helper function to create test secrets
@@ -45,20 +47,20 @@ func createTestSecrets() []client.Object {
 }
 
 // Helper function to create test project
-func createTestProject() *SupabaseProject {
-	return &SupabaseProject{
+func createTestProject() *supabasev1alpha1.SupabaseProject {
+	return &supabasev1alpha1.SupabaseProject{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-project",
 			Namespace: "default",
 		},
-		Spec: SupabaseProjectSpec{
+		Spec: supabasev1alpha1.SupabaseProjectSpec{
 			ProjectID: "test-project",
-			Database: DatabaseConfig{
+			Database: supabasev1alpha1.DatabaseConfig{
 				SecretRef: corev1.SecretReference{
 					Name: "db-secret",
 				},
 			},
-			Storage: StorageConfig{
+			Storage: supabasev1alpha1.StorageConfig{
 				SecretRef: corev1.SecretReference{
 					Name: "storage-secret",
 				},
@@ -70,11 +72,11 @@ func createTestProject() *SupabaseProject {
 func TestValidateCreate_SecretExistence(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = AddToScheme(scheme)
+	_ = supabasev1alpha1.AddToScheme(scheme)
 
 	tests := []struct {
 		name    string
-		project *SupabaseProject
+		project *supabasev1alpha1.SupabaseProject
 		secrets []client.Object
 		wantErr bool
 		errMsg  string
@@ -87,19 +89,19 @@ func TestValidateCreate_SecretExistence(t *testing.T) {
 		},
 		{
 			name: "missing database secret should fail",
-			project: &SupabaseProject{
+			project: &supabasev1alpha1.SupabaseProject{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-project",
 					Namespace: "default",
 				},
-				Spec: SupabaseProjectSpec{
+				Spec: supabasev1alpha1.SupabaseProjectSpec{
 					ProjectID: "test-project",
-					Database: DatabaseConfig{
+					Database: supabasev1alpha1.DatabaseConfig{
 						SecretRef: corev1.SecretReference{
 							Name: "missing-db-secret",
 						},
 					},
-					Storage: StorageConfig{
+					Storage: supabasev1alpha1.StorageConfig{
 						SecretRef: corev1.SecretReference{
 							Name: "storage-secret",
 						},
@@ -119,19 +121,19 @@ func TestValidateCreate_SecretExistence(t *testing.T) {
 		},
 		{
 			name: "missing storage secret should fail",
-			project: &SupabaseProject{
+			project: &supabasev1alpha1.SupabaseProject{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-project",
 					Namespace: "default",
 				},
-				Spec: SupabaseProjectSpec{
+				Spec: supabasev1alpha1.SupabaseProjectSpec{
 					ProjectID: "test-project",
-					Database: DatabaseConfig{
+					Database: supabasev1alpha1.DatabaseConfig{
 						SecretRef: corev1.SecretReference{
 							Name: "db-secret",
 						},
 					},
-					Storage: StorageConfig{
+					Storage: supabasev1alpha1.StorageConfig{
 						SecretRef: corev1.SecretReference{
 							Name: "missing-storage-secret",
 						},
@@ -180,11 +182,11 @@ func TestValidateCreate_SecretExistence(t *testing.T) {
 func TestValidateCreate_RequiredSecretKeys(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
-	_ = AddToScheme(scheme)
+	_ = supabasev1alpha1.AddToScheme(scheme)
 
 	tests := []struct {
 		name    string
-		project *SupabaseProject
+		project *supabasev1alpha1.SupabaseProject
 		secrets []client.Object
 		wantErr bool
 		errMsg  string
@@ -197,19 +199,19 @@ func TestValidateCreate_RequiredSecretKeys(t *testing.T) {
 		},
 		{
 			name: "missing database host key should fail",
-			project: &SupabaseProject{
+			project: &supabasev1alpha1.SupabaseProject{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-project",
 					Namespace: "default",
 				},
-				Spec: SupabaseProjectSpec{
+				Spec: supabasev1alpha1.SupabaseProjectSpec{
 					ProjectID: "test-project",
-					Database: DatabaseConfig{
+					Database: supabasev1alpha1.DatabaseConfig{
 						SecretRef: corev1.SecretReference{
 							Name: "db-secret",
 						},
 					},
-					Storage: StorageConfig{
+					Storage: supabasev1alpha1.StorageConfig{
 						SecretRef: corev1.SecretReference{
 							Name: "storage-secret",
 						},
@@ -248,19 +250,19 @@ func TestValidateCreate_RequiredSecretKeys(t *testing.T) {
 		},
 		{
 			name: "missing storage endpoint key should fail",
-			project: &SupabaseProject{
+			project: &supabasev1alpha1.SupabaseProject{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-project",
 					Namespace: "default",
 				},
-				Spec: SupabaseProjectSpec{
+				Spec: supabasev1alpha1.SupabaseProjectSpec{
 					ProjectID: "test-project",
-					Database: DatabaseConfig{
+					Database: supabasev1alpha1.DatabaseConfig{
 						SecretRef: corev1.SecretReference{
 							Name: "db-secret",
 						},
 					},
-					Storage: StorageConfig{
+					Storage: supabasev1alpha1.StorageConfig{
 						SecretRef: corev1.SecretReference{
 							Name: "storage-secret",
 						},
@@ -334,28 +336,28 @@ func TestValidateCreate_ImageReferenceValidation(t *testing.T) {
 	}{
 		{
 			name: "valid kong image",
-			config: &KongConfig{
+			config: &supabasev1alpha1.KongConfig{
 				Image: "kong:2.8.1",
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid auth image",
-			config: &AuthConfig{
+			config: &supabasev1alpha1.AuthConfig{
 				Image: "supabase/gotrue:v2.177.0",
 			},
 			wantErr: false,
 		},
 		{
 			name: "empty image should use default",
-			config: &KongConfig{
+			config: &supabasev1alpha1.KongConfig{
 				Image: "",
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid image format should fail",
-			config: &KongConfig{
+			config: &supabasev1alpha1.KongConfig{
 				Image: "invalid image:with spaces",
 			},
 			wantErr: true,
@@ -363,7 +365,7 @@ func TestValidateCreate_ImageReferenceValidation(t *testing.T) {
 		},
 		{
 			name: "missing tag should fail",
-			config: &KongConfig{
+			config: &supabasev1alpha1.KongConfig{
 				Image: "kong",
 			},
 			wantErr: true,
@@ -375,9 +377,9 @@ func TestValidateCreate_ImageReferenceValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var image string
 			switch c := tt.config.(type) {
-			case *KongConfig:
+			case *supabasev1alpha1.KongConfig:
 				image = c.Image
-			case *AuthConfig:
+			case *supabasev1alpha1.AuthConfig:
 				image = c.Image
 			}
 
@@ -411,13 +413,13 @@ func TestValidateCreate_ImageReferenceValidation(t *testing.T) {
 func TestDefault_ResourceDefaults(t *testing.T) {
 	tests := []struct {
 		name    string
-		project *SupabaseProject
+		project *supabasev1alpha1.SupabaseProject
 	}{
 		{
 			name: "webhook default should complete without error",
-			project: &SupabaseProject{
-				Spec: SupabaseProjectSpec{
-					Kong: &KongConfig{
+			project: &supabasev1alpha1.SupabaseProject{
+				Spec: supabasev1alpha1.SupabaseProjectSpec{
+					Kong: &supabasev1alpha1.KongConfig{
 						Resources: nil,
 					},
 				},
@@ -425,9 +427,9 @@ func TestDefault_ResourceDefaults(t *testing.T) {
 		},
 		{
 			name: "webhook default with existing resources should not error",
-			project: &SupabaseProject{
-				Spec: SupabaseProjectSpec{
-					Kong: &KongConfig{
+			project: &supabasev1alpha1.SupabaseProject{
+				Spec: supabasev1alpha1.SupabaseProjectSpec{
+					Kong: &supabasev1alpha1.KongConfig{
 						Resources: &corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
 								corev1.ResourceMemory: resource.MustParse("1Gi"),
