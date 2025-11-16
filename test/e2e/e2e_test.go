@@ -324,7 +324,7 @@ spec:
 			))
 		})
 
-		It("should report failure when database secret content is invalid (T105b)", func() {
+		It("should reject database secrets missing required keys (T105b)", func() {
 			By("creating invalid database secret (missing required keys)")
 			createSecret(testNamespace, "invalid-db-secret", map[string]string{
 				"invalid-key": "invalid-value",
@@ -347,38 +347,23 @@ spec:
       name: %s
 `, projectName, testNamespace, storageSecretName)
 
-			applyManifest(manifest)
+			tmpFile, err := os.CreateTemp("", "manifest-*.yaml")
+			Expect(err).NotTo(HaveOccurred())
+			defer os.Remove(tmpFile.Name())
 
-			By("verifying Ready condition is False with InvalidSecret reason")
-			verifyInvalidSecret := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "supabaseproject",
-					fmt.Sprintf("%s-invalid", projectName),
-					"-n", testNamespace,
-					"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
-				status, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(status).To(Equal("False"))
+			_, err = tmpFile.WriteString(manifest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tmpFile.Close()).To(Succeed())
 
-				cmd = exec.Command("kubectl", "get", "supabaseproject",
-					fmt.Sprintf("%s-invalid", projectName),
-					"-n", testNamespace,
-					"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].reason}")
-				reason, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(reason).To(Or(
-					ContainSubstring("Invalid"),
-					ContainSubstring("Failed"),
-					ContainSubstring("Error"),
-				))
-			}
-			Eventually(verifyInvalidSecret, 2*time.Minute).Should(Succeed())
+			By("expecting admission webhook to reject the SupabaseProject")
+			cmd := exec.Command("kubectl", "apply", "-f", tmpFile.Name())
+			output, err := utils.Run(cmd)
+			Expect(err).To(HaveOccurred(), "Expected webhook to reject SupabaseProject with invalid database secret")
+			Expect(output).To(ContainSubstring("admission webhook"))
+			Expect(output).To(ContainSubstring("database secret missing required key"))
 
 			By("cleaning up invalid resources")
-			cmd := exec.Command("kubectl", "delete", "supabaseproject",
-				fmt.Sprintf("%s-invalid", projectName),
-				"-n", testNamespace)
-			_, _ = utils.Run(cmd)
-			cmd = exec.Command("kubectl", "delete", "secret", "invalid-db-secret", "-n", testNamespace)
+			cmd = exec.Command("kubectl", "delete", "secret", "invalid-db-secret", "-n", testNamespace, "--ignore-not-found=true")
 			_, _ = utils.Run(cmd)
 		})
 
