@@ -25,13 +25,13 @@ import (
 
 // namespace where the project is deployed in
 const namespace = "supabase-operator-system"
+const helmReleaseName = "supabase-operator"
 
 var _ = Describe("Manager", Ordered, func() {
 	var controllerPodName string
 
 	// Before running the tests, set up the environment by creating the namespace,
-	// enforce the restricted security policy to the namespace, installing CRDs,
-	// and deploying the controller.
+	// enforce the restricted security policy to the namespace, and installing the controller via Helm.
 	BeforeAll(func() {
 		By("creating manager namespace")
 		cmd := exec.Command("kubectl", "create", "ns", namespace)
@@ -44,30 +44,33 @@ var _ = Describe("Manager", Ordered, func() {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
 
-		By("installing CRDs")
-		cmd = exec.Command("make", "install")
+		By("installing the operator via Helm chart")
+		cmd = exec.Command("helm", "upgrade", "--install", helmReleaseName, "helm/supabase-operator",
+			"--namespace", namespace,
+			"--create-namespace",
+			"--wait",
+			"--timeout", "5m",
+			"--set", fmt.Sprintf("image.repository=%s", projectImageRepository),
+			"--set", fmt.Sprintf("image.tag=%s", projectImageTag),
+			"--set", "image.pullPolicy=IfNotPresent",
+		)
 		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
-
-		By("deploying the controller-manager")
-		cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+		Expect(err).NotTo(HaveOccurred(), "Failed to install the operator Helm release")
 	})
 
-	// After all tests have been executed, clean up by undeploying the controller, uninstalling CRDs,
+	// After all tests have been executed, clean up by uninstalling the Helm release, removing CRDs,
 	// and deleting the namespace.
 	AfterAll(func() {
-		By("undeploying the controller-manager")
-		cmd := exec.Command("make", "undeploy")
+		By("uninstalling the operator Helm release")
+		cmd := exec.Command("helm", "uninstall", helmReleaseName, "-n", namespace, "--wait")
 		_, _ = utils.Run(cmd)
 
-		By("uninstalling CRDs")
-		cmd = exec.Command("make", "uninstall")
+		By("cleaning up Supabase CRDs")
+		cmd = exec.Command("kubectl", "delete", "crd", "supabaseprojects.supabase.strrl.dev", "--ignore-not-found=true")
 		_, _ = utils.Run(cmd)
 
 		By("removing manager namespace")
-		cmd = exec.Command("kubectl", "delete", "ns", namespace)
+		cmd = exec.Command("kubectl", "delete", "ns", namespace, "--ignore-not-found=true")
 		_, _ = utils.Run(cmd)
 	})
 
@@ -76,6 +79,10 @@ var _ = Describe("Manager", Ordered, func() {
 	AfterEach(func() {
 		specReport := CurrentSpecReport()
 		if specReport.Failed() {
+			if controllerPodName == "" {
+				_, _ = fmt.Fprintf(GinkgoWriter, "controllerPodName not set; skipping pod log/describe collection\n")
+				return
+			}
 			By("Fetching controller manager pod logs")
 			cmd := exec.Command("kubectl", "logs", controllerPodName, "-n", namespace)
 			controllerLogs, err := utils.Run(cmd)
@@ -114,7 +121,9 @@ var _ = Describe("Manager", Ordered, func() {
 			verifyControllerUp := func(g Gomega) {
 				// Get the name of the controller-manager pod
 				cmd := exec.Command("kubectl", "get",
-					"pods", "-l", "control-plane=controller-manager",
+					"pods",
+					"-l", "app.kubernetes.io/name=supabase-operator",
+					"-l", fmt.Sprintf("app.kubernetes.io/instance=%s", helmReleaseName),
 					"-o", "go-template={{ range .items }}"+
 						"{{ if not .metadata.deletionTimestamp }}"+
 						"{{ .metadata.name }}"+
@@ -127,7 +136,7 @@ var _ = Describe("Manager", Ordered, func() {
 				podNames := utils.GetNonEmptyLines(podOutput)
 				g.Expect(podNames).To(HaveLen(1), "expected 1 controller pod running")
 				controllerPodName = podNames[0]
-				g.Expect(controllerPodName).To(ContainSubstring("controller-manager"))
+				g.Expect(controllerPodName).To(ContainSubstring(helmReleaseName))
 
 				// Validate the pod's status
 				cmd = exec.Command("kubectl", "get",
