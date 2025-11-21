@@ -66,3 +66,9 @@ tolerations: []
 affinity: {}
 
 topologySpreadConstraints: []
+
+webhook:
+  enabled: true
+  servicePort: 443
+  targetPort: 9443
+  failurePolicy: Fail

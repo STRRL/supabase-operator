@@ -4,10 +4,13 @@
 package e2e
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,9 +27,11 @@ var (
 	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
 	isCertManagerAlreadyInstalled = false
 
-	// projectImage is the name of the image which will be build and loaded
-	// with the code source changes to be tested.
-	projectImage = "example.com/supabase-operator:v0.0.1"
+	// projectImage* describe the local image built for e2e; keep repo/tag split
+	// so we can feed them into Helm values easily.
+	projectImageRepository = firstNonEmpty(os.Getenv("E2E_IMG_REPO"), "example.com/supabase-operator")
+	projectImageTag        = ""
+	projectImage           = ""
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -40,6 +45,9 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	projectImageTag = resolveImageTag()
+	projectImage = fmt.Sprintf("%s:%s", projectImageRepository, projectImageTag)
+
 	By("building the manager(Operator) image")
 	cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
 	_, err := utils.Run(cmd)
@@ -66,6 +74,61 @@ var _ = BeforeSuite(func() {
 		}
 	}
 })
+
+// resolveImageTag picks an image tag for e2e image builds.
+// Priority: explicit env E2E_IMG_TAG -> git short SHA (+ -dirty if needed) -> timestamp.
+func resolveImageTag() string {
+	if envTag := os.Getenv("E2E_IMG_TAG"); envTag != "" {
+		return envTag
+	}
+
+	shortSHA, err := gitRevParseShort()
+	if err == nil && shortSHA != "" {
+		if dirty, derr := gitIsDirty(); derr == nil && dirty {
+			return shortSHA + "-dirty"
+		}
+		return shortSHA
+	}
+
+	return fmt.Sprintf("dev-%d", time.Now().Unix())
+}
+
+func gitRevParseShort() (string, error) {
+	root, err := utils.GetProjectDir()
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func gitIsDirty() (bool, error) {
+	root, err := utils.GetProjectDir()
+	if err != nil {
+		return false, err
+	}
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		return false, err
+	}
+	return len(bytes.TrimSpace(out)) > 0, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 var _ = AfterSuite(func() {
 	// Teardown CertManager after the suite if not skipped and if it was not already installed

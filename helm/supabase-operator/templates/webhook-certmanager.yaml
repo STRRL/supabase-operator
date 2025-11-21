@@ -1,0 +1,27 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "supabase-operator.fullname" . }}-selfsigned-issuer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "supabase-operator.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "supabase-operator.webhookCertSecret" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "supabase-operator.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+    - {{ include "supabase-operator.webhookServiceName" . }}.{{ .Release.Namespace }}.svc
+    - {{ include "supabase-operator.webhookServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ include "supabase-operator.fullname" . }}-selfsigned-issuer
+  secretName: {{ include "supabase-operator.webhookCertSecret" . }}
+{{- end }}

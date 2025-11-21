@@ -60,3 +60,17 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Webhook service name
+*/}}
+{{- define "supabase-operator.webhookServiceName" -}}
+{{- printf "%s-webhook" (include "supabase-operator.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Webhook certificate secret name
+*/}}
+{{- define "supabase-operator.webhookCertSecret" -}}
+{{- printf "%s-webhook-cert" (include "supabase-operator.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
