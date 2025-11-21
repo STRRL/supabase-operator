@@ -1,0 +1,22 @@
+apiVersion: v2
+name: supabase-operator
+description: Kubernetes operator that provisions Supabase projects and dependencies.
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+home: https://github.com/STRRL/supabase-operator
+sources:
+  - https://github.com/STRRL/supabase-operator
+keywords:
+  - supabase
+  - operator
+  - kubernetes
+maintainers:
+  - name: STRRL
+    email: im@strrl.dev
+annotations:
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/operator: "true"
+  artifacthub.io/operatorCapabilities: "Seamless Upgrades"
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/license: "Apache-2.0"
