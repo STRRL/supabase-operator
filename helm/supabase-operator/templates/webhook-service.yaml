@@ -1,0 +1,17 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "supabase-operator.webhookServiceName" . }}
+  labels:
+    {{- include "supabase-operator.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "supabase-operator.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: webhook
+      port: {{ .Values.webhook.servicePort }}
+      targetPort: {{ .Values.webhook.targetPort }}
+      protocol: TCP
+{{- end }}
