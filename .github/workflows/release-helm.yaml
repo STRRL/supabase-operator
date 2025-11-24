@@ -1,0 +1,67 @@
+name: Release Helm Chart
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'  # Only semantic version tags (v1.2.3)
+
+permissions:
+  contents: write  # Required for pushing to gh-pages branch
+
+concurrency:
+  group: helm-release
+  cancel-in-progress: false  # Queue releases, don't cancel
+
+jobs:
+  release-chart:
+    name: Package and Release Helm Chart
+    runs-on: ubuntu-latest
+
+    steps:
+      # T007: Add checkout step with full git history
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for version extraction
+
+      # T008: Add version extraction step
+      - name: Extract Version from Tag
+        id: extract_version
+        run: |
+          GIT_TAG=${GITHUB_REF##*/}
+          VERSION=${GIT_TAG##v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION from tag: $GIT_TAG"
+
+      # T009: Update Chart.yaml with extracted version
+      - name: Update Chart Version
+        run: |
+          sed -i "s/^version:.*/version: ${{ steps.extract_version.outputs.version }}/" helm/supabase-operator/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.extract_version.outputs.version }}\"/" helm/supabase-operator/Chart.yaml
+          echo "Updated Chart.yaml with version ${{ steps.extract_version.outputs.version }}"
+
+      # T010: Add helm lint validation step
+      - name: Lint Helm Chart
+        run: |
+          helm lint helm/supabase-operator
+          if [ $? -ne 0 ]; then
+            echo "Helm chart validation failed"
+            exit 1
+          fi
+          echo "Helm chart validation passed"
+
+      # T011 & T013: Configure stefanprodan/helm-gh-pages action with git user
+      - name: Publish Helm Chart
+        uses: stefanprodan/helm-gh-pages@master
+        with:
+          token: ${{ secrets.HELM_TOKEN }}
+          charts_dir: helm
+          charts_url: https://helm.strrl.dev
+          owner: STRRL
+          repository: helm.strrl.dev
+          branch: gh-pages
+          app_version: ${{ steps.extract_version.outputs.version }}
+          chart_version: ${{ steps.extract_version.outputs.version }}
+          linting: on
+          commit_username: github-actions[bot]
+          commit_email: github-actions[bot]@users.noreply.github.com
