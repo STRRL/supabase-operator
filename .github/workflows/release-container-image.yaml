@@ -60,7 +60,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ghcr.io/${{ github.repository }}:${{ needs.metadata.outputs.version }}-amd64
+          tags: ghcr.io/strrl/supabase-operator:${{ needs.metadata.outputs.version }}-amd64
           labels: ${{ needs.metadata.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -93,7 +93,7 @@ jobs:
           context: .
           platforms: linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ghcr.io/${{ github.repository }}:${{ needs.metadata.outputs.version }}-arm64
+          tags: ghcr.io/strrl/supabase-operator:${{ needs.metadata.outputs.version }}-arm64
           labels: ${{ needs.metadata.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -119,8 +119,8 @@ jobs:
           TAGS="${{ needs.metadata.outputs.tags }}"
           VERSION="${{ needs.metadata.outputs.version }}"
 
-          # Convert repository to lowercase
-          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          # Use lowercase repository name
+          REPO="strrl/supabase-operator"
 
           # Create manifest for each tag
           echo "$TAGS" | while IFS= read -r TAG; do
