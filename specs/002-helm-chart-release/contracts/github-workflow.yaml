@@ -1,0 +1,110 @@
+# GitHub Actions Workflow Contract
+# This defines the interface for the Helm release workflow
+
+name: Release Helm Chart
+
+# Trigger Contract
+on:
+  push:
+    tags:
+      # Pattern: Semantic version tags only
+      # Format: v{MAJOR}.{MINOR}.{PATCH}
+      # Examples: v1.0.0, v2.3.1, v0.1.0
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+# Permission Contract
+permissions:
+  contents: write  # Required for pushing to gh-pages branch
+
+# Concurrency Contract
+concurrency:
+  group: helm-release
+  cancel-in-progress: false  # Queue releases, don't cancel
+
+# Environment Contract
+env:
+  CHARTS_DIR: charts
+  CHART_NAME: supabase-operator
+  TARGET_REPO: STRRL/helm.strrl.dev
+  TARGET_BRANCH: gh-pages
+
+# Job Contract
+jobs:
+  release:
+    name: Package and Release Helm Chart
+    runs-on: ubuntu-latest
+
+    # Output Contract
+    outputs:
+      chart_version: ${{ steps.version.outputs.version }}
+      chart_url: ${{ steps.release.outputs.chart_url }}
+
+    steps:
+      # Step 1: Checkout Contract
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for version extraction
+
+      # Step 2: Version Extraction Contract
+      - name: Extract Version from Tag
+        id: version
+        # Input: GITHUB_REF (refs/tags/v1.2.3)
+        # Output: version (1.2.3)
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # Step 3: Chart Update Contract
+      - name: Update Chart Version
+        # Input: Chart.yaml at $CHARTS_DIR/$CHART_NAME/Chart.yaml
+        # Operation: Update version and appVersion fields
+        # Output: Modified Chart.yaml
+        run: |
+          sed -i "s/^version:.*/version: ${{ steps.version.outputs.version }}/" \
+            ${{ env.CHARTS_DIR }}/${{ env.CHART_NAME }}/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.version.outputs.version }}\"/" \
+            ${{ env.CHARTS_DIR }}/${{ env.CHART_NAME }}/Chart.yaml
+
+      # Step 4: Validation Contract
+      - name: Lint Helm Chart
+        # Input: Chart at $CHARTS_DIR/$CHART_NAME
+        # Output: Success/Failure status
+        # Failure: Stops workflow execution
+        run: |
+          helm lint ${{ env.CHARTS_DIR }}/${{ env.CHART_NAME }}
+
+      # Step 5: Release Contract
+      - name: Package and Publish Chart
+        id: release
+        uses: stefanprodan/helm-gh-pages@master
+        with:
+          # Authentication
+          token: ${{ secrets.HELM_REPO_TOKEN }}
+
+          # Source Configuration
+          charts_dir: ${{ env.CHARTS_DIR }}
+
+          # Target Configuration
+          owner: STRRL
+          repository: helm.strrl.dev
+          branch: ${{ env.TARGET_BRANCH }}
+          charts_url: https://helm.strrl.dev
+
+          # Version Configuration
+          chart_version: ${{ steps.version.outputs.version }}
+          app_version: ${{ steps.version.outputs.version }}
+
+          # Validation
+          linting: on
+
+          # Git Configuration
+          commit_username: github-actions[bot]
+          commit_email: github-actions[bot]@users.noreply.github.com
+
+# Failure Contract
+# On any step failure:
+# - Workflow stops immediately
+# - No partial release
+# - No notification sent (per spec)
+# - Failure visible in GitHub Actions UI

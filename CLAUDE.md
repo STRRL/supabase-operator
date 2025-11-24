@@ -30,10 +30,9 @@ Building a Kubernetes operator for deploying and managing self-hosted Supabase i
 - Follow Kubernetes API conventions
 
 ## Recent Changes
+- 002-helm-chart-release: Added Go 1.22+ (operator code), YAML (Helm charts/workflows) + GitHub Actions, helm-gh-pages action, Helm 3.x
 - Initialized Kubebuilder project with domain strrl.dev
 - Created SupabaseProject API scaffold
-- Defined comprehensive data model with status design
-- Planned reconciliation strategy based on Rook patterns
 
 ## Testing Requirements
 - Unit tests for reconciliation logic
@@ -43,3 +42,7 @@ Building a Kubernetes operator for deploying and managing self-hosted Supabase i
 
 ## Current Focus
 Implementing the SupabaseProject controller with granular status management and component deployment logic.
+
+## Active Technologies
+- Go 1.22+ (operator code), YAML (Helm charts/workflows) + GitHub Actions, helm-gh-pages action, Helm 3.x (002-helm-chart-release)
+- GitHub Pages repository for chart hosting (002-helm-chart-release)

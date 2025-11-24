@@ -1,0 +1,86 @@
+# Helm Chart Metadata Contract
+# This defines the required structure for Chart.yaml
+# Location: charts/supabase-operator/Chart.yaml
+
+# Required Fields
+apiVersion: v2  # Required: Helm chart API version (v2 for Helm 3)
+name: supabase-operator  # Required: Chart name (must be lowercase alphanumeric, - or .)
+version: 0.1.0  # Required: SemVer 2 version of the chart
+
+# Recommended Fields
+appVersion: "0.1.0"  # Version of the application (quoted to ensure string type)
+description: Kubernetes operator for deploying self-hosted Supabase instances  # Max 140 characters
+type: application  # application or library (default: application)
+
+# Optional Metadata
+home: https://github.com/STRRL/supabase-operator  # Project home page
+sources:  # Source code URLs
+  - https://github.com/STRRL/supabase-operator
+
+# Maintainers
+maintainers:
+  - name: STRRL  # Required if maintainers section exists
+    email: contact@example.com  # Optional
+    url: https://github.com/STRRL  # Optional
+
+# Search Keywords
+keywords:
+  - supabase
+  - operator
+  - kubernetes
+  - database
+  - realtime
+  - authentication
+
+# Chart Icon
+icon: https://raw.githubusercontent.com/STRRL/supabase-operator/main/logo.png  # Optional
+
+# Deprecation Flag
+deprecated: false  # Optional, default is false
+
+# Dependencies (Optional)
+dependencies:  # List of charts this chart depends on
+  - name: postgresql  # Required: Dependency chart name
+    version: "12.x.x"  # Required: Version constraint
+    repository: https://charts.bitnami.com/bitnami  # Required: Repository URL
+    condition: postgresql.enabled  # Optional: Condition for including
+    tags:  # Optional: Tags for grouping
+      - database
+    import-values:  # Optional: Import values from dependency
+      - child: postgresql.auth
+        parent: auth
+
+# Annotations (Optional)
+annotations:
+  # ArtifactHub Annotations
+  artifacthub.io/changes: |  # Changelog for this version
+    - kind: added
+      description: Initial release
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/signKey: |  # GPG key for verification
+    fingerprint: ABCD1234567890
+    url: https://raw.githubusercontent.com/STRRL/supabase-operator/main/pgp-key.asc
+
+  # Custom Annotations
+  example.com/team: platform
+  example.com/tier: production
+
+# Validation Rules:
+# 1. apiVersion must be "v2" for Helm 3
+# 2. name must match directory name and be valid DNS name
+# 3. version must be valid SemVer (without 'v' prefix)
+# 4. version must be unique across all releases
+# 5. appVersion should be quoted to preserve string format
+# 6. description should be concise (recommended < 140 chars)
+# 7. URLs in sources, home, icon must be valid and accessible
+# 8. dependencies versions must use valid constraints
+
+# Version Update Contract:
+# When releasing new version:
+# 1. version field MUST be updated to match git tag (without 'v')
+# 2. appVersion SHOULD be updated to match application version
+# 3. annotations.artifacthub.io/changes SHOULD be updated with changelog
+
+# File Encoding: UTF-8
+# Line Endings: LF (Unix-style)
