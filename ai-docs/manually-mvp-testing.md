@@ -2,7 +2,7 @@
 
 **Purpose:** Step-by-step guide for manually testing the Supabase Operator MVP to validate core functionality.
 
-**Last Updated:** 2025-10-13
+**Last Updated:** 2025-11-25
 
 ---
 
@@ -149,8 +149,13 @@ minikube image ls | grep supabase-operator
 #### Step 2.2: Deploy Operator
 
 ```bash
-# Generate and apply manifests
-make deploy IMG=supabase-operator:test
+# Install via Helm using the locally built image
+helm upgrade --install supabase-operator ./helm/supabase-operator \
+  --namespace supabase-operator-system \
+  --create-namespace \
+  --wait \
+  --set image.repository=supabase-operator \
+  --set image.tag=test
 
 # Wait for operator to be ready
 kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n supabase-operator-system --timeout=120s
@@ -165,10 +170,10 @@ kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n su
 
 ```bash
 # Check operator pod
-kubectl get pods -n supabase-operator-system
+kubectl get pods -n supabase-operator-system -l app.kubernetes.io/name=supabase-operator
 
 # Check operator logs (should show leader election success)
-kubectl logs -n supabase-operator-system deployment/supabase-operator-controller-manager --tail=20
+kubectl logs -n supabase-operator-system deployment/supabase-operator --tail=20
 
 # Verify CRD is installed
 kubectl get crd supabaseprojects.supabase.strrl.dev
@@ -748,7 +753,7 @@ kubectl wait --for=delete supabaseproject/test-project -n test-supabase --timeou
 kubectl delete namespace test-supabase dev-deps
 
 # Stop operator
-kubectl delete -k config/default
+helm uninstall supabase-operator -n supabase-operator-system --wait || true
 
 # (Optional) Delete minikube cluster
 minikube delete

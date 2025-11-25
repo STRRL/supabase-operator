@@ -53,13 +53,13 @@ Kubernetes operator using Kubebuilder standard layout:
 - [x] T024 Define ComponentsStatus and ComponentStatus in api/v1alpha1/supabaseproject_types.go
 - [x] T025 Define DependenciesStatus and EndpointsStatus in api/v1alpha1/supabaseproject_types.go
 - [x] T026 Add kubebuilder markers for CRD generation in api/v1alpha1/supabaseproject_types.go
-- [x] T027 Run make manifests to generate CRD YAML in config/crd/bases/
+- [x] T027 Run make manifests to generate CRD YAML in helm/supabase-operator/crds/
 
 ### Webhooks
 - [x] T028 Implement ValidateCreate for secret validation in api/v1alpha1/supabaseproject_webhook.go
 - [x] T029 Implement ValidateUpdate for spec changes in api/v1alpha1/supabaseproject_webhook.go
 - [x] T030 Implement Default method for resource defaults in api/v1alpha1/supabaseproject_webhook.go
-- [x] T031 Add webhook configuration in config/webhook/
+- [x] T031 Webhook configuration provided via Helm chart templates
 
 ## Phase 3.4: Secret Management (TDD)
 
@@ -178,10 +178,10 @@ Kubernetes operator using Kubebuilder standard layout:
 - [x] T106a [P] E2E test: Status reporting with component status and conditions in test/e2e/e2e_test.go
 
 ## Phase 3.9: Integration & Configuration
-- [x] T107 Sample SupabaseProject CR exists in config/samples/supabase_v1alpha1_supabaseproject.yaml
-- [x] T108 [P] RBAC permissions configured in config/rbac/role.yaml
-- [x] T109 [P] Manager deployment configured in config/manager/manager.yaml
-- [x] T110 [P] Prometheus ServiceMonitor configured in config/prometheus/monitor.yaml (controller-runtime provides standard metrics)
+- [x] T107 Sample SupabaseProject CR provided via Helm chart documentation (no repo sample manifest)
+- [x] T108 [P] RBAC permissions configured in Helm templates (clusterrole/rolebinding)
+- [x] T109 [P] Manager deployment configured in Helm deployment template
+- [x] T110 [P] Prometheus scraping configurable via custom ServiceMonitor (not shipped in chart)
 - [x] T111 [P] Structured logging implemented via controller-runtime's log package
 - [x] T112 [P] Event recording capability available (now used in all state transitions)
 - [x] T112a Implement event recording for all phase transitions (Pending, ValidatingDeps, InitializingDatabase, DeployingSecrets, DeployingComponents, Running, Failed)

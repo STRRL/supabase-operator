@@ -10,17 +10,22 @@ This guide walks you through installing the Supabase Operator on Kubernetes and 
 - Administrative access for creating Kubernetes secrets and applying manifests
 
 ## Step 1 – Install the Operator
-### Option A: Use the Published Manifests (Recommended)
+### Option A: Install with Helm (Recommended)
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/strrl/supabase-operator/main/config/install.yaml
+helm upgrade --install supabase-operator ./helm/supabase-operator \
+  --namespace supabase-operator-system \
+  --create-namespace \
+  --wait
 ```
 
 ### Option B: Install from Source
 ```bash
 git clone https://github.com/strrl/supabase-operator
 cd supabase-operator
-make install
-make deploy
+helm upgrade --install supabase-operator ./helm/supabase-operator \
+  --namespace supabase-operator-system \
+  --create-namespace \
+  --wait
 ```
 
 Verify that the controller manager pods are running:
@@ -158,10 +163,11 @@ kubectl delete supabaseproject my-supabase
 ```
 If you installed the operator only for evaluation, remove it as well:
 ```bash
-kubectl delete -f https://raw.githubusercontent.com/strrl/supabase-operator/main/config/install.yaml
+helm uninstall supabase-operator -n supabase-operator-system --wait
+kubectl delete crd supabaseprojects.supabase.strrl.dev --ignore-not-found
 ```
 
 ## Next Steps
-- Review the CRD specification under `config/crd/bases` to customize per-component settings such as replica counts and resource limits.
+- Review the CRD specification under `helm/supabase-operator/crds` to customize per-component settings such as replica counts and resource limits.
 - Explore `docs/database-initialization.md` for bootstrap guidance on preparing your PostgreSQL database.
 - Add cluster ingress or load balancer resources to expose Supabase services publicly.

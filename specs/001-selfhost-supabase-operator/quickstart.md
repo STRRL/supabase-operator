@@ -28,18 +28,17 @@
 ### 1. Install the Supabase Operator
 
 ```bash
-# Install CRDs
-kubectl apply -f https://raw.githubusercontent.com/strrl/supabase-operator/main/config/crd/bases/supabase.strrl.dev_supabaseprojects.yaml
-
-# Install operator
-kubectl apply -f https://raw.githubusercontent.com/strrl/supabase-operator/main/config/manager/manager.yaml
+helm upgrade --install supabase-operator ./helm/supabase-operator \
+  --namespace supabase-operator-system \
+  --create-namespace \
+  --wait
 ```
 
 ### 2. Verify Installation
 
 ```bash
 # Check operator is running
-kubectl get pods -n supabase-system
+kubectl get pods -n supabase-operator-system -l app.kubernetes.io/name=supabase-operator
 
 # Check CRD is installed
 kubectl get crd supabaseprojects.supabase.strrl.dev
@@ -300,7 +299,7 @@ kubectl delete secret postgres-config s3-config my-project-jwt
 
 ### Check Operator Logs
 ```bash
-kubectl logs -n supabase-system deployment/supabase-operator-manager
+kubectl logs -n supabase-operator-system deployment/supabase-operator
 ```
 
 ### Check Component Logs

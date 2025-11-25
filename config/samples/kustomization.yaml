@@ -1,4 +1,0 @@
-## Append samples of your project ##
-resources:
-- supabase_v1alpha1_supabaseproject.yaml
-# +kubebuilder:scaffold:manifestskustomizesamples

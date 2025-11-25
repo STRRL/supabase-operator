@@ -40,7 +40,10 @@ The operator manages:
 ### Deploy the Operator
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/strrl/supabase-operator/main/config/install.yaml
+helm upgrade --install supabase-operator ./helm/supabase-operator \
+  --namespace supabase-operator-system \
+  --create-namespace \
+  --wait
 ```
 
 Or install from source:
@@ -48,8 +51,10 @@ Or install from source:
 ```bash
 git clone https://github.com/strrl/supabase-operator
 cd supabase-operator
-make install
-make deploy
+helm upgrade --install supabase-operator ./helm/supabase-operator \
+  --namespace supabase-operator-system \
+  --create-namespace \
+  --wait
 ```
 
 ### Build Container Image
@@ -326,11 +331,9 @@ kubectl port-forward -n supabase-operator-system \
 
 ### ServiceMonitor
 
-If using Prometheus Operator, the operator includes a ServiceMonitor:
-
-```bash
-kubectl apply -k config/prometheus
-```
+If you run Prometheus Operator, create a `ServiceMonitor` that points at the metrics service
+(`app.kubernetes.io/name=supabase-operator`, port `8443`). The Helm chart does not yet ship one;
+add your own manifest or a Helm subchart to scrape the metrics endpoint.
 
 ## Troubleshooting
 
@@ -416,7 +419,7 @@ make test
 ### Run Locally
 
 ```bash
-make install  # Install CRDs
+kubectl apply -f helm/supabase-operator/crds/supabase.strrl.dev_supabaseprojects.yaml  # Install CRD
 make run      # Run controller locally
 ```
 
