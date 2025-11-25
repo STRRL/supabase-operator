@@ -68,6 +68,7 @@ jobs:
           labels: ${{ needs.metadata.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
 
   build-arm64:
     needs: metadata
@@ -96,6 +97,7 @@ jobs:
           labels: ${{ needs.metadata.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
 
   create-manifest:
     needs: [metadata, build-amd64, build-arm64]
