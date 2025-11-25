@@ -71,15 +71,10 @@ jobs:
 
   build-arm64:
     needs: metadata
-    runs-on: ubuntu-latest  # Self-hosted runner is offline, using QEMU emulation
+    runs-on: [self-hosted, linux, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
