@@ -1,5 +1,8 @@
 # Build the supabase-operator binary
-FROM golang:1.25 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.25 AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /workspace
 
@@ -7,19 +10,18 @@ WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
-
 # Build the binary with a cached module/download layer
 COPY . .
 RUN --mount=type=cache,target=/go \
-  CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+  CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
   go build -ldflags="-s -w" -o supabase-operator ./cmd/main.go
 
 FROM gcr.io/distroless/static:nonroot
 LABEL org.opencontainers.image.source="https://github.com/STRRL/supabase-operator"
 WORKDIR /
 COPY --from=builder /workspace/supabase-operator /usr/bin/supabase-operator
-USER nonroot:nonroot
+# Use numeric UID/GID for Kubernetes runAsNonRoot verification
+# 65532 is the UID of 'nonroot' user in distroless images
+USER 65532:65532
 
 ENTRYPOINT ["supabase-operator"]

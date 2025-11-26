@@ -72,6 +72,9 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 MINIKUBE ?= minikube
 MINIKUBE_PROFILE ?= supabase-operator-test-e2e
 MINIKUBE_START_ARGS ?= --driver=docker
+E2E_IMG_REPO ?= ghcr.io/strrl/supabase-operator
+E2E_IMG_TAG ?= $(shell ./hack/commit-hash.sh)
+E2E_IMG ?= $(E2E_IMG_REPO):$(E2E_IMG_TAG)
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Set up a Minikube profile for e2e tests if it does not exist
@@ -92,7 +95,9 @@ setup-test-e2e: ## Set up a Minikube profile for e2e tests if it does not exist
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests against a Minikube profile.
-	MINIKUBE=$(MINIKUBE) MINIKUBE_PROFILE=$(MINIKUBE_PROFILE) KUBECONFIG=$(LOCALBIN)/$(MINIKUBE_PROFILE)-kubeconfig go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+	./hack/build-image.sh
+	$(MINIKUBE) image load $(E2E_IMG) -p $(MINIKUBE_PROFILE)
+	MINIKUBE=$(MINIKUBE) MINIKUBE_PROFILE=$(MINIKUBE_PROFILE) KUBECONFIG=$(LOCALBIN)/$(MINIKUBE_PROFILE)-kubeconfig E2E_IMG_REPO=$(E2E_IMG_REPO) E2E_IMG_TAG=$(E2E_IMG_TAG) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: cleanup-test-e2e

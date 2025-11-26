@@ -168,15 +168,24 @@ var _ = Describe("Manager", Ordered, func() {
 		const projectName = "test-supabase-project"
 		const dbSecretName = "test-db-secret"
 		const storageSecretName = "test-storage-secret"
+		const postgresName = "test-postgres"
+
+		BeforeAll(func() {
+			By("deploying PostgreSQL for testing")
+			deployPostgres(testNamespace, postgresName)
+
+			By("waiting for PostgreSQL to be ready")
+			waitForPostgres(testNamespace, postgresName)
+		})
 
 		BeforeEach(func() {
 			By("creating database secret")
 			createSecret(testNamespace, dbSecretName, map[string]string{
-				"host":     "postgres.example.com",
+				"host":     fmt.Sprintf("%s.%s.svc.cluster.local", postgresName, testNamespace),
 				"port":     "5432",
 				"database": "supabase",
 				"username": "postgres",
-				"password": "test-password",
+				"password": "testpassword",
 			})
 
 			By("creating storage secret")
@@ -198,6 +207,12 @@ var _ = Describe("Manager", Ordered, func() {
 			cmd = exec.Command("kubectl", "delete", "secret", dbSecretName, "-n", testNamespace, "--ignore-not-found=true")
 			_, _ = utils.Run(cmd)
 			cmd = exec.Command("kubectl", "delete", "secret", storageSecretName, "-n", testNamespace, "--ignore-not-found=true")
+			_, _ = utils.Run(cmd)
+
+			By("cleaning up PostgreSQL")
+			cmd = exec.Command("kubectl", "delete", "deployment", postgresName, "-n", testNamespace, "--ignore-not-found=true")
+			_, _ = utils.Run(cmd)
+			cmd = exec.Command("kubectl", "delete", "service", postgresName, "-n", testNamespace, "--ignore-not-found=true")
 			_, _ = utils.Run(cmd)
 		})
 
@@ -497,6 +512,26 @@ spec:
 				return fmt.Errorf("kong pod not ready yet")
 			}, 4*time.Minute, 2*time.Second).Should(Succeed())
 
+			By("waiting for Kong service to have ready endpoints")
+			Eventually(func() error {
+				// Check if the Kong service has ready endpoints
+				cmd := exec.Command("kubectl", "get", "endpoints",
+					fmt.Sprintf("%s-kong", projectName),
+					"-n", testNamespace,
+					"-o", "jsonpath={.subsets[*].addresses[*].ip}")
+				output, err := utils.Run(cmd)
+				if err != nil {
+					return err
+				}
+				if output == "" {
+					return fmt.Errorf("kong service has no ready endpoints")
+				}
+				return nil
+			}, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+			By("waiting additional time for Kong to fully initialize")
+			time.Sleep(10 * time.Second)
+
 			By("port-forwarding the Kong pod to localhost")
 			portForwardCmd, err := startPortForward(testNamespace, fmt.Sprintf("pod/%s", kongPodName), localStudioPort, 8000)
 			Expect(err).NotTo(HaveOccurred())
@@ -612,7 +647,7 @@ func startPortForward(namespace, resource string, localPort, remotePort int) (*e
 		return nil, err
 	}
 
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", localPort), 500*time.Millisecond)
 		if err == nil {
@@ -723,4 +758,74 @@ func captureStudioScreenshot(ctx context.Context, chromePath, url, username, pas
 		return err
 	}
 	return os.WriteFile(outputPath, screenshot, 0o644)
+}
+
+// deployPostgres deploys a PostgreSQL instance for testing.
+func deployPostgres(namespace, name string) {
+	// Create Deployment
+	deploymentManifest := fmt.Sprintf(`
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: %s
+  template:
+    metadata:
+      labels:
+        app: %s
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15
+        env:
+        - name: POSTGRES_PASSWORD
+          value: testpassword
+        - name: POSTGRES_DB
+          value: supabase
+        ports:
+        - containerPort: 5432
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
+`, name, namespace, name, name)
+
+	applyManifest(deploymentManifest)
+
+	// Create Service
+	serviceManifest := fmt.Sprintf(`
+apiVersion: v1
+kind: Service
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  selector:
+    app: %s
+  ports:
+  - port: 5432
+    targetPort: 5432
+`, name, namespace, name)
+
+	applyManifest(serviceManifest)
+}
+
+// waitForPostgres waits for PostgreSQL to be ready.
+func waitForPostgres(namespace, name string) {
+	Eventually(func(g Gomega) {
+		cmd := exec.Command("kubectl", "get", "deployment", name, "-n", namespace,
+			"-o", "jsonpath={.status.readyReplicas}")
+		output, err := utils.Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(output).To(Equal("1"))
+	}, 3*time.Minute, 5*time.Second).Should(Succeed())
 }

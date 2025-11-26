@@ -84,37 +84,48 @@ func InstallCertManager() error {
 	return err
 }
 
-// IsCertManagerCRDsInstalled checks if any Cert Manager CRDs are installed
-// by verifying the existence of key CRDs related to Cert Manager.
+// IsCertManagerCRDsInstalled checks if Cert Manager is fully installed and running.
+// It verifies both the existence of CRDs and that the webhook deployment is available.
 func IsCertManagerCRDsInstalled() bool {
-	// List of common Cert Manager CRDs
-	certManagerCRDs := []string{
-		"certificates.cert-manager.io",
-		"issuers.cert-manager.io",
-		"clusterissuers.cert-manager.io",
-		"certificaterequests.cert-manager.io",
-		"orders.acme.cert-manager.io",
-		"challenges.acme.cert-manager.io",
-	}
-
-	// Execute the kubectl command to get all CRDs
-	cmd := exec.Command("kubectl", "get", "crds")
+	// First, check if cert-manager-webhook deployment exists and is available
+	cmd := exec.Command("kubectl", "get", "deployment", "cert-manager-webhook",
+		"-n", "cert-manager", "-o", "jsonpath={.status.availableReplicas}")
 	output, err := Run(cmd)
 	if err != nil {
 		return false
 	}
+	// If no available replicas, cert-manager is not fully running
+	if strings.TrimSpace(output) == "" || strings.TrimSpace(output) == "0" {
+		return false
+	}
 
-	// Check if any of the Cert Manager CRDs are present
+	// Also verify CRDs exist
+	certManagerCRDs := []string{
+		"certificates.cert-manager.io",
+		"issuers.cert-manager.io",
+	}
+
+	cmd = exec.Command("kubectl", "get", "crds")
+	output, err = Run(cmd)
+	if err != nil {
+		return false
+	}
+
 	crdList := GetNonEmptyLines(output)
 	for _, crd := range certManagerCRDs {
+		found := false
 		for _, line := range crdList {
 			if strings.Contains(line, crd) {
-				return true
+				found = true
+				break
 			}
+		}
+		if !found {
+			return false
 		}
 	}
 
-	return false
+	return true
 }
 
 // LoadImageToMinikubeProfile loads a local docker image into the configured Minikube profile.

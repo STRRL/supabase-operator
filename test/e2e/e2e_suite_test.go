@@ -27,9 +27,8 @@ var (
 	// isCertManagerAlreadyInstalled will be set true when CertManager CRDs be found on the cluster
 	isCertManagerAlreadyInstalled = false
 
-	// projectImage* describe the local image built for e2e; keep repo/tag split
-	// so we can feed them into Helm values easily.
-	projectImageRepository = firstNonEmpty(os.Getenv("E2E_IMG_REPO"), "example.com/supabase-operator")
+	// projectImage* describe the operator image used in e2e; defaults can be overridden via env.
+	projectImageRepository = firstNonEmpty(os.Getenv("E2E_IMG_REPO"), "ghcr.io/strrl/supabase-operator")
 	projectImageTag        = ""
 	projectImage           = ""
 )
@@ -48,16 +47,7 @@ var _ = BeforeSuite(func() {
 	projectImageTag = resolveImageTag()
 	projectImage = fmt.Sprintf("%s:%s", projectImageRepository, projectImageTag)
 
-	By("building the manager(Operator) image")
-	cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectImage))
-	_, err := utils.Run(cmd)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image")
-
-	// TODO(user): If you want to change the e2e test vendor from Minikube, ensure the image is
-	// built and available before running the tests. Also, remove the following block.
-	By("loading the manager(Operator) image into Minikube")
-	err = utils.LoadImageToMinikubeProfile(projectImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Minikube")
+	By(fmt.Sprintf("using operator image %s", projectImage))
 
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,
@@ -80,14 +70,6 @@ var _ = BeforeSuite(func() {
 func resolveImageTag() string {
 	if envTag := os.Getenv("E2E_IMG_TAG"); envTag != "" {
 		return envTag
-	}
-
-	shortSHA, err := gitRevParseShort()
-	if err == nil && shortSHA != "" {
-		if dirty, derr := gitIsDirty(); derr == nil && dirty {
-			return shortSHA + "-dirty"
-		}
-		return shortSHA
 	}
 
 	return fmt.Sprintf("dev-%d", time.Now().Unix())
