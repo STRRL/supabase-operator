@@ -18,6 +18,7 @@ spec:
       labels:
         app: postgres
     spec:
+      enableServiceLinks: false
       containers:
       - name: postgres
         image: supabase/postgres:15.14.1.021
@@ -27,16 +28,9 @@ spec:
         - name: POSTGRES_DB
           value: "postgres"
         - name: POSTGRES_USER
-          value: "postgres"
+          value: "supabase_admin"
         - name: POSTGRES_PASSWORD
           value: "postgres"
-        - name: JWT_SECRET
-          value: "super-secret-jwt-token-with-at-least-32-characters-long"
-        - name: JWT_EXP
-          value: "3600"
-        volumeMounts:
-        - name: postgres-storage
-          mountPath: /var/lib/postgresql/data
         resources:
           requests:
             memory: "256Mi"
@@ -44,9 +38,6 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
-      volumes:
-      - name: postgres-storage
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
