@@ -694,7 +694,6 @@ func captureStudioScreenshot(ctx context.Context, chromePath, url, username, pas
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("single-process", true),
 		chromedp.Flag("hide-scrollbars", true),
 		chromedp.Flag("window-size", "1280,720"),
 		chromedp.Flag("remote-allow-origins", "*"),
@@ -708,7 +707,7 @@ func captureStudioScreenshot(ctx context.Context, chromePath, url, username, pas
 	const maxAttempts = 3
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		attemptAllocatorCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, allocOpts...)
-		attemptCtx, cancelTimeout := context.WithTimeout(attemptAllocatorCtx, 5*time.Minute)
+		attemptCtx, cancelTimeout := context.WithTimeout(attemptAllocatorCtx, 1*time.Minute)
 
 		browserCtx, cancelCtx := chromedp.NewContext(
 			attemptCtx,

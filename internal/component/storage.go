@@ -198,7 +198,7 @@ func (b *StorageBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*ap
 			},
 		},
 		{
-			Name: "S3_ENDPOINT",
+			Name: "GLOBAL_S3_ENDPOINT",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -207,6 +207,22 @@ func (b *StorageBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*ap
 					Key: "endpoint",
 				},
 			},
+		},
+		{
+			Name:  "GLOBAL_S3_FORCE_PATH_STYLE",
+			Value: "true",
+		},
+		{
+			Name:  "TENANT_ID",
+			Value: "stub",
+		},
+		{
+			Name:  "REGION",
+			Value: "stub",
+		},
+		{
+			Name:  "POSTGREST_URL",
+			Value: "http://" + project.Name + "-postgrest:3000",
 		},
 	}
 
@@ -289,12 +305,12 @@ func (b *StorageBuilder) BuildService(project *v1alpha1.SupabaseProject) (*corev
 func getStorageDefaultResources() corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse("64Mi"),
-			corev1.ResourceCPU:    resource.MustParse("50m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
+			corev1.ResourceCPU:    resource.MustParse("100m"),
 		},
 		Limits: corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse("128Mi"),
-			corev1.ResourceCPU:    resource.MustParse("100m"),
+			corev1.ResourceMemory: resource.MustParse("512Mi"),
+			corev1.ResourceCPU:    resource.MustParse("500m"),
 		},
 	}
 }
