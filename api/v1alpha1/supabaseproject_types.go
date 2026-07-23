@@ -99,7 +99,7 @@ type StorageConfig struct {
 }
 
 type KongConfig struct {
-	// +kubebuilder:default="kong:2.8.1"
+	// +kubebuilder:default="kong/kong:3.9.1"
 	// +optional
 	Image string `json:"image,omitempty"`
 
@@ -117,7 +117,7 @@ type KongConfig struct {
 }
 
 type AuthConfig struct {
-	// +kubebuilder:default="supabase/gotrue:v2.180.0"
+	// +kubebuilder:default="supabase/gotrue:v2.189.0"
 	// +optional
 	Image string `json:"image,omitempty"`
 
@@ -141,7 +141,7 @@ type AuthConfig struct {
 }
 
 type RealtimeConfig struct {
-	// +kubebuilder:default="supabase/realtime:v2.51.11"
+	// +kubebuilder:default="supabase/realtime:v2.102.3"
 	// +optional
 	Image string `json:"image,omitempty"`
 
@@ -159,7 +159,7 @@ type RealtimeConfig struct {
 }
 
 type PostgRESTConfig struct {
-	// +kubebuilder:default="postgrest/postgrest:v13.0.7"
+	// +kubebuilder:default="postgrest/postgrest:v14.12"
 	// +optional
 	Image string `json:"image,omitempty"`
 
@@ -177,7 +177,7 @@ type PostgRESTConfig struct {
 }
 
 type StorageAPIConfig struct {
-	// +kubebuilder:default="supabase/storage-api:v1.32.0"
+	// +kubebuilder:default="supabase/storage-api:v1.60.4"
 	// +optional
 	Image string `json:"image,omitempty"`
 
@@ -195,7 +195,7 @@ type StorageAPIConfig struct {
 }
 
 type MetaConfig struct {
-	// +kubebuilder:default="supabase/postgres-meta:v0.93.1"
+	// +kubebuilder:default="supabase/postgres-meta:v0.96.6"
 	// +optional
 	Image string `json:"image,omitempty"`
 
@@ -213,7 +213,7 @@ type MetaConfig struct {
 }
 
 type StudioConfig struct {
-	// +kubebuilder:default="supabase/studio:2025.10.01-sha-8460121"
+	// +kubebuilder:default="supabase/studio:2026.07.07-sha-a6a04f2"
 	// +optional
 	Image string `json:"image,omitempty"`
 

@@ -9,13 +9,13 @@ package v1alpha1
 // which reads the upstream compose file:
 // https://github.com/supabase/supabase/blob/master/docker/docker-compose.yml
 const (
-	DefaultKongImage       = "kong:2.8.1"
-	DefaultAuthImage       = "supabase/gotrue:v2.180.0"
-	DefaultPostgRESTImage  = "postgrest/postgrest:v13.0.7"
-	DefaultRealtimeImage   = "supabase/realtime:v2.51.11"
-	DefaultStorageAPIImage = "supabase/storage-api:v1.32.0"
-	DefaultMetaImage       = "supabase/postgres-meta:v0.93.1"
-	DefaultStudioImage     = "supabase/studio:2025.10.01-sha-8460121"
+	DefaultKongImage       = "kong/kong:3.9.1"
+	DefaultAuthImage       = "supabase/gotrue:v2.189.0"
+	DefaultPostgRESTImage  = "postgrest/postgrest:v14.12"
+	DefaultRealtimeImage   = "supabase/realtime:v2.102.3"
+	DefaultStorageAPIImage = "supabase/storage-api:v1.60.4"
+	DefaultMetaImage       = "supabase/postgres-meta:v0.96.6"
+	DefaultStudioImage     = "supabase/studio:2026.07.07-sha-a6a04f2"
 )
 
 // DefaultPostgresImage is used by the database init job only. The operator
