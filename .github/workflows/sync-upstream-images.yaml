@@ -1,0 +1,60 @@
+name: Sync Upstream Images
+
+# Weekly job that pulls component image versions from the upstream Supabase
+# compose file and opens a PR when anything changed. The existing e2e
+# workflow on the PR acts as the compatibility gate for version bumps.
+#
+# Note: PRs created with the default GITHUB_TOKEN do not trigger other
+# workflows (lint, test, e2e). Configure a SYNC_UPSTREAM_TOKEN secret with
+# a PAT (repo scope) so CI runs on the sync PRs automatically. Without it
+# the job falls back to GITHUB_TOKEN and CI must be triggered by closing
+# and reopening the PR.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Sync image versions from upstream
+        run: ./hack/sync-upstream-images.sh
+
+      - name: Regenerate CRD schema and run tests
+        run: make test
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.SYNC_UPSTREAM_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: chore/sync-upstream-images
+          commit-message: "chore: sync component image versions from upstream Supabase"
+          title: "chore: sync component image versions from upstream Supabase"
+          body: |
+            Automated sync of default component image versions from the
+            upstream Supabase compose file:
+            https://github.com/supabase/supabase/blob/master/docker/docker-compose.yml
+
+            Updated files:
+            - `api/v1alpha1/wellknown_images.go`
+            - `api/v1alpha1/supabaseproject_types.go`
+            - `helm/supabase-operator/crds/` (regenerated)
+
+            Please review the version changes and make sure the e2e workflow
+            passes before merging. Major version jumps (for example Kong)
+            may need manual config changes in the component builders.
+          delete-branch: true

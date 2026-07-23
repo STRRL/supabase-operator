@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/strrl/supabase-operator/api/v1alpha1"
-	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -26,7 +25,7 @@ func (b *RealtimeBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*a
 		replicas = project.Spec.Realtime.Replicas
 	}
 
-	image := webhook.DefaultRealtimeImage
+	image := v1alpha1.DefaultRealtimeImage
 	if project.Spec.Realtime != nil && project.Spec.Realtime.Image != "" {
 		image = project.Spec.Realtime.Image
 	}
