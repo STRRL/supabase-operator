@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/strrl/supabase-operator/api/v1alpha1"
-	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,7 +26,7 @@ func (b *KongBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 		replicas = project.Spec.Kong.Replicas
 	}
 
-	image := webhook.DefaultKongImage
+	image := v1alpha1.DefaultKongImage
 	if project.Spec.Kong != nil && project.Spec.Kong.Image != "" {
 		image = project.Spec.Kong.Image
 	}

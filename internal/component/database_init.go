@@ -19,7 +19,6 @@ package component
 import (
 	"github.com/strrl/supabase-operator/api/v1alpha1"
 	"github.com/strrl/supabase-operator/internal/database/migrations"
-	"github.com/strrl/supabase-operator/internal/webhook"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -138,7 +137,7 @@ func BuildDatabaseInitJob(project *v1alpha1.SupabaseProject) *batchv1.Job {
 					Containers: []corev1.Container{
 						{
 							Name:  "init",
-							Image: webhook.DefaultPostgresImage,
+							Image: v1alpha1.DefaultPostgresImage,
 							Command: []string{
 								"bash",
 								"/scripts/run-migrations.sh",

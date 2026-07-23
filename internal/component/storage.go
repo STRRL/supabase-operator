@@ -2,7 +2,6 @@ package component
 
 import (
 	"github.com/strrl/supabase-operator/api/v1alpha1"
-	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -24,7 +23,7 @@ func (b *StorageBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*ap
 		replicas = project.Spec.StorageAPI.Replicas
 	}
 
-	image := webhook.DefaultStorageAPIImage
+	image := v1alpha1.DefaultStorageAPIImage
 	if project.Spec.StorageAPI != nil && project.Spec.StorageAPI.Image != "" {
 		image = project.Spec.StorageAPI.Image
 	}

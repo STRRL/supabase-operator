@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/strrl/supabase-operator/api/v1alpha1"
-	"github.com/strrl/supabase-operator/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,8 +39,8 @@ func TestBuildKongDeployment(t *testing.T) {
 		t.Errorf("Expected 1 replica, got %d", *deployment.Spec.Replicas)
 	}
 
-	if deployment.Spec.Template.Spec.Containers[0].Image != webhook.DefaultKongImage {
-		t.Errorf("Expected image '%s', got '%s'", webhook.DefaultKongImage, deployment.Spec.Template.Spec.Containers[0].Image)
+	if deployment.Spec.Template.Spec.Containers[0].Image != v1alpha1.DefaultKongImage {
+		t.Errorf("Expected image '%s', got '%s'", v1alpha1.DefaultKongImage, deployment.Spec.Template.Spec.Containers[0].Image)
 	}
 
 	resources := deployment.Spec.Template.Spec.Containers[0].Resources
@@ -210,8 +209,8 @@ func TestBuildAuthDeployment(t *testing.T) {
 		t.Errorf("Expected name 'test-project-auth', got '%s'", deployment.Name)
 	}
 
-	if deployment.Spec.Template.Spec.Containers[0].Image != webhook.DefaultAuthImage {
-		t.Errorf("Expected default image '%s', got '%s'", webhook.DefaultAuthImage, deployment.Spec.Template.Spec.Containers[0].Image)
+	if deployment.Spec.Template.Spec.Containers[0].Image != v1alpha1.DefaultAuthImage {
+		t.Errorf("Expected default image '%s', got '%s'", v1alpha1.DefaultAuthImage, deployment.Spec.Template.Spec.Containers[0].Image)
 	}
 }
 
@@ -328,8 +327,8 @@ func TestBuildStudioDeployment(t *testing.T) {
 	}
 
 	container := deployment.Spec.Template.Spec.Containers[0]
-	if container.Image != webhook.DefaultStudioImage {
-		t.Errorf("Expected default image '%s', got '%s'", webhook.DefaultStudioImage, container.Image)
+	if container.Image != v1alpha1.DefaultStudioImage {
+		t.Errorf("Expected default image '%s', got '%s'", v1alpha1.DefaultStudioImage, container.Image)
 	}
 }
 

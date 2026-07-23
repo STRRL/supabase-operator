@@ -2,7 +2,6 @@ package component
 
 import (
 	"github.com/strrl/supabase-operator/api/v1alpha1"
-	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -24,7 +23,7 @@ func (b *MetaBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 		replicas = project.Spec.Meta.Replicas
 	}
 
-	image := webhook.DefaultMetaImage
+	image := v1alpha1.DefaultMetaImage
 	if project.Spec.Meta != nil && project.Spec.Meta.Image != "" {
 		image = project.Spec.Meta.Image
 	}

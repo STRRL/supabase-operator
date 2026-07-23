@@ -48,49 +48,49 @@ func (r *SupabaseProjectWebhook) Default(ctx context.Context, obj runtime.Object
 		project.Spec.Kong = &supabasev1alpha1.KongConfig{}
 	}
 	if project.Spec.Kong.Image == "" {
-		project.Spec.Kong.Image = DefaultKongImage
+		project.Spec.Kong.Image = supabasev1alpha1.DefaultKongImage
 	}
 
 	if project.Spec.Auth == nil {
 		project.Spec.Auth = &supabasev1alpha1.AuthConfig{}
 	}
 	if project.Spec.Auth.Image == "" {
-		project.Spec.Auth.Image = DefaultAuthImage
+		project.Spec.Auth.Image = supabasev1alpha1.DefaultAuthImage
 	}
 
 	if project.Spec.PostgREST == nil {
 		project.Spec.PostgREST = &supabasev1alpha1.PostgRESTConfig{}
 	}
 	if project.Spec.PostgREST.Image == "" {
-		project.Spec.PostgREST.Image = DefaultPostgRESTImage
+		project.Spec.PostgREST.Image = supabasev1alpha1.DefaultPostgRESTImage
 	}
 
 	if project.Spec.Realtime == nil {
 		project.Spec.Realtime = &supabasev1alpha1.RealtimeConfig{}
 	}
 	if project.Spec.Realtime.Image == "" {
-		project.Spec.Realtime.Image = DefaultRealtimeImage
+		project.Spec.Realtime.Image = supabasev1alpha1.DefaultRealtimeImage
 	}
 
 	if project.Spec.StorageAPI == nil {
 		project.Spec.StorageAPI = &supabasev1alpha1.StorageAPIConfig{}
 	}
 	if project.Spec.StorageAPI.Image == "" {
-		project.Spec.StorageAPI.Image = DefaultStorageAPIImage
+		project.Spec.StorageAPI.Image = supabasev1alpha1.DefaultStorageAPIImage
 	}
 
 	if project.Spec.Meta == nil {
 		project.Spec.Meta = &supabasev1alpha1.MetaConfig{}
 	}
 	if project.Spec.Meta.Image == "" {
-		project.Spec.Meta.Image = DefaultMetaImage
+		project.Spec.Meta.Image = supabasev1alpha1.DefaultMetaImage
 	}
 
 	if project.Spec.Studio == nil {
 		project.Spec.Studio = &supabasev1alpha1.StudioConfig{}
 	}
 	if project.Spec.Studio.Image == "" {
-		project.Spec.Studio.Image = DefaultStudioImage
+		project.Spec.Studio.Image = supabasev1alpha1.DefaultStudioImage
 	}
 
 	return nil

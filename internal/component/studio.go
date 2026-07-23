@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/strrl/supabase-operator/api/v1alpha1"
-	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -26,7 +25,7 @@ func (b *StudioBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*app
 		replicas = project.Spec.Studio.Replicas
 	}
 
-	image := webhook.DefaultStudioImage
+	image := v1alpha1.DefaultStudioImage
 	if project.Spec.Studio != nil && project.Spec.Studio.Image != "" {
 		image = project.Spec.Studio.Image
 	}

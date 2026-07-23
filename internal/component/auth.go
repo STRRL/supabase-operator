@@ -2,7 +2,6 @@ package component
 
 import (
 	"github.com/strrl/supabase-operator/api/v1alpha1"
-	"github.com/strrl/supabase-operator/internal/webhook"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -24,7 +23,7 @@ func (b *AuthBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 		replicas = project.Spec.Auth.Replicas
 	}
 
-	image := webhook.DefaultAuthImage
+	image := v1alpha1.DefaultAuthImage
 	if project.Spec.Auth != nil && project.Spec.Auth.Image != "" {
 		image = project.Spec.Auth.Image
 	}

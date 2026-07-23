@@ -166,7 +166,7 @@ func TestStorageConfig_SecretReference(t *testing.T) {
 func TestKongConfig_Defaults(t *testing.T) {
 	config := &KongConfig{}
 
-	expectedImage := "kong:2.8.1"
+	expectedImage := DefaultKongImage
 	if config.Image == "" {
 		config.Image = expectedImage
 	}
@@ -203,7 +203,7 @@ func TestKongConfig_Defaults(t *testing.T) {
 func TestAuthConfig_Defaults(t *testing.T) {
 	config := &AuthConfig{}
 
-	expectedImage := "supabase/gotrue:v2.177.0"
+	expectedImage := DefaultAuthImage
 	if config.Image == "" {
 		config.Image = expectedImage
 	}
@@ -225,7 +225,7 @@ func TestAuthConfig_Defaults(t *testing.T) {
 func TestRealtimeConfig_Defaults(t *testing.T) {
 	config := &RealtimeConfig{}
 
-	expectedImage := "supabase/realtime:v2.34.47"
+	expectedImage := DefaultRealtimeImage
 	if config.Image == "" {
 		config.Image = expectedImage
 	}
@@ -247,7 +247,7 @@ func TestRealtimeConfig_Defaults(t *testing.T) {
 func TestPostgRESTConfig_Defaults(t *testing.T) {
 	config := &PostgRESTConfig{}
 
-	expectedImage := "postgrest/postgrest:v12.2.12"
+	expectedImage := DefaultPostgRESTImage
 	if config.Image == "" {
 		config.Image = expectedImage
 	}
@@ -269,7 +269,7 @@ func TestPostgRESTConfig_Defaults(t *testing.T) {
 func TestStorageAPIConfig_Defaults(t *testing.T) {
 	config := &StorageAPIConfig{}
 
-	expectedImage := "supabase/storage-api:v1.25.7"
+	expectedImage := DefaultStorageAPIImage
 	if config.Image == "" {
 		config.Image = expectedImage
 	}
@@ -291,7 +291,7 @@ func TestStorageAPIConfig_Defaults(t *testing.T) {
 func TestMetaConfig_Defaults(t *testing.T) {
 	config := &MetaConfig{}
 
-	expectedImage := "supabase/postgres-meta:v0.91.0"
+	expectedImage := DefaultMetaImage
 	if config.Image == "" {
 		config.Image = expectedImage
 	}
@@ -313,7 +313,7 @@ func TestMetaConfig_Defaults(t *testing.T) {
 func TestStudioConfig_Defaults(t *testing.T) {
 	config := &StudioConfig{}
 
-	expectedImage := "supabase/studio:2025.10.01-sha-8460121"
+	expectedImage := DefaultStudioImage
 	if config.Image == "" {
 		config.Image = expectedImage
 	}
