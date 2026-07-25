@@ -469,6 +469,19 @@ spec:
 			}
 			Eventually(verifyRunning, 3*time.Minute).Should(Succeed())
 
+			// The previous spec (T106) patches the Kong image, which can leave a
+			// rollout in progress. Wait for it to settle so the pod picked below
+			// is not an old-generation pod about to be terminated.
+			By("waiting for Kong deployment rollout to complete")
+			Eventually(func() error {
+				cmd := exec.Command("kubectl", "rollout", "status",
+					fmt.Sprintf("deployment/%s-kong", projectName),
+					"-n", testNamespace,
+					"--timeout=10s")
+				_, err := utils.Run(cmd)
+				return err
+			}, 4*time.Minute, 5*time.Second).Should(Succeed())
+
 			By("waiting for Kong pod to report Ready")
 			var kongPodName string
 			Eventually(func() error {
