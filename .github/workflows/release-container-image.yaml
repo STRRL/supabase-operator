@@ -53,6 +53,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./image/supabase-operator/Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ghcr.io/${{ needs.metadata.outputs.owner }}/supabase-operator:${{ needs.metadata.outputs.version }}-amd64
@@ -81,6 +82,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./image/supabase-operator/Dockerfile
           platforms: linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ghcr.io/${{ needs.metadata.outputs.owner }}/supabase-operator:${{ needs.metadata.outputs.version }}-arm64
