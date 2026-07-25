@@ -229,7 +229,7 @@ func (r *SupabaseProjectWebhook) validateImages(project *supabasev1alpha1.Supaba
 		}
 
 		if !strings.Contains(image, ":") {
-			return fmt.Errorf("image must include tag (e.g., 'kong:2.8.1')")
+			return fmt.Errorf("image must include tag (e.g., 'kong/kong:3.9.1')")
 		}
 
 		_ = component

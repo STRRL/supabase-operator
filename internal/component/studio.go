@@ -62,6 +62,35 @@ func (b *StudioBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*app
 		{Name: "STUDIO_PG_META_URL", Value: metaURL},
 		{Name: "NEXT_PUBLIC_ENABLE_LOGS", Value: "false"},
 		{Name: "NEXT_ANALYTICS_BACKEND_PROVIDER", Value: "postgres"},
+		{Name: "ENABLED_FEATURES_LOGS_ALL", Value: "false"},
+		{Name: "POSTGRES_USER_READ_WRITE", Value: "postgres"},
+		{
+			Name: "POSTGRES_HOST",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: project.Spec.Database.SecretRef.Name},
+					Key:                  "host",
+				},
+			},
+		},
+		{
+			Name: "POSTGRES_PORT",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: project.Spec.Database.SecretRef.Name},
+					Key:                  "port",
+				},
+			},
+		},
+		{
+			Name: "POSTGRES_DB",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: project.Spec.Database.SecretRef.Name},
+					Key:                  "database",
+				},
+			},
+		},
 		{
 			Name: "POSTGRES_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{

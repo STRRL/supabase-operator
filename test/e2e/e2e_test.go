@@ -429,7 +429,7 @@ spec:
 			time.Sleep(10 * time.Second)
 
 			By("updating the SupabaseProject spec")
-			patchJSON := `{"spec":{"kong":{"image":"kong:2.8.2"}}}`
+			patchJSON := `{"spec":{"kong":{"image":"kong/kong:3.9.0"}}}`
 			cmd := exec.Command("kubectl", "patch", "supabaseproject", projectName,
 				"-n", testNamespace,
 				"--type=merge",

@@ -337,7 +337,7 @@ func TestValidateCreate_ImageReferenceValidation(t *testing.T) {
 		{
 			name: "valid kong image",
 			config: &supabasev1alpha1.KongConfig{
-				Image: "kong:2.8.1",
+				Image: "kong/kong:3.9.1",
 			},
 			wantErr: false,
 		},
@@ -369,7 +369,7 @@ func TestValidateCreate_ImageReferenceValidation(t *testing.T) {
 				Image: "kong",
 			},
 			wantErr: true,
-			errMsg:  "image must include tag (e.g., 'kong:2.8.1')",
+			errMsg:  "image must include tag (e.g., 'kong/kong:3.9.1')",
 		},
 	}
 

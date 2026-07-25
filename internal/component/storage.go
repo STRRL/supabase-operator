@@ -71,7 +71,7 @@ func (b *StorageBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*ap
 			},
 		},
 		{
-			Name: "PGRST_JWT_SECRET",
+			Name: "AUTH_JWT_SECRET",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{

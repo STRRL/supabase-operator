@@ -57,6 +57,10 @@ func (b *AuthBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 			Value: "http://localhost:8000",
 		},
 		{
+			Name:  "GOTRUE_API_HOST",
+			Value: "0.0.0.0",
+		},
+		{
 			Name:  "GOTRUE_API_PORT",
 			Value: "9999",
 		},
@@ -141,6 +145,14 @@ func (b *AuthBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 		{
 			Name:  "GOTRUE_JWT_EXP",
 			Value: "3600",
+		},
+		{
+			Name:  "GOTRUE_JWT_ADMIN_ROLES",
+			Value: "service_role",
+		},
+		{
+			Name:  "GOTRUE_JWT_AUD",
+			Value: "authenticated",
 		},
 		{
 			Name:  "GOTRUE_JWT_DEFAULT_GROUP_NAME",
