@@ -110,7 +110,26 @@ func (b *RealtimeBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*a
 			Value: fmt.Sprintf("postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=%s", sslMode),
 		},
 		{
-			Name: "JWT_SECRET",
+			Name:  "DB_AFTER_CONNECT_QUERY",
+			Value: "SET search_path TO _realtime",
+		},
+		{
+			Name:  "DB_ENC_KEY",
+			Value: "supabaserealtime",
+		},
+		{
+			Name: "API_JWT_SECRET",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: project.Name + "-jwt",
+					},
+					Key: "jwt-secret",
+				},
+			},
+		},
+		{
+			Name: "METRICS_JWT_SECRET",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -144,7 +163,29 @@ func (b *RealtimeBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*a
 			Value: "10000",
 		},
 		{
-			Name:  "SECURE_CHANNELS",
+			Name:  "ERL_AFLAGS",
+			Value: "-proto_dist inet_tcp",
+		},
+		{
+			Name:  "DNS_NODES",
+			Value: "''",
+		},
+		{
+			Name:  "SEED_SELF_HOST",
+			Value: "true",
+		},
+		// The tenant external id must match the first DNS label of the host
+		// Kong proxies to, i.e. the realtime Service name.
+		{
+			Name:  "SELF_HOST_TENANT_NAME",
+			Value: project.Name + "-realtime",
+		},
+		{
+			Name:  "RUN_JANITOR",
+			Value: "true",
+		},
+		{
+			Name:  "DISABLE_HEALTHCHECK_LOGGING",
 			Value: "true",
 		},
 	}

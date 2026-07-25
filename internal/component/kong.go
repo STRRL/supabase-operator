@@ -1,7 +1,6 @@
 package component
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/strrl/supabase-operator/api/v1alpha1"
@@ -11,6 +10,395 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
+
+// kongDeclarativeConfigPath is where the entrypoint script writes the rendered
+// declarative config. It must be writable by the kong user (uid 1001) in the
+// official kong/kong image.
+const kongDeclarativeConfigPath = "/usr/local/kong/kong.yml"
+
+// kongEntrypointScript mirrors upstream supabase docker/volumes/api/kong-entrypoint.sh.
+// The operator does not support opaque API keys yet, so only the legacy
+// passthrough branch of the Lua expressions is kept. Environment variable
+// substitution uses awk instead of eval/echo to preserve YAML quoting.
+const kongEntrypointScript = `#!/bin/sh
+export LUA_AUTH_EXPR="\$((headers.authorization ~= nil and headers.authorization:sub(1, 10) ~= 'Bearer sb_' and headers.authorization) or headers.apikey)"
+export LUA_RT_WS_EXPR="\$(query_params.apikey)"
+
+awk '{
+  result = ""
+  rest = $0
+  while (match(rest, /\$[A-Za-z_][A-Za-z_0-9]*/)) {
+    varname = substr(rest, RSTART + 1, RLENGTH - 1)
+    if (varname in ENVIRON) {
+      result = result substr(rest, 1, RSTART - 1) ENVIRON[varname]
+    } else {
+      result = result substr(rest, 1, RSTART + RLENGTH - 1)
+    }
+    rest = substr(rest, RSTART + RLENGTH)
+  }
+  print result rest
+}' /etc/kong/kong.yml > "$KONG_DECLARATIVE_CONFIG"
+
+exec /entrypoint.sh kong docker-start
+`
+
+// kongDeclarativeConfigTemplate mirrors upstream supabase docker/volumes/api/kong.yml.
+// {{PROJECT}} is replaced with the SupabaseProject name. Routes for components
+// the operator does not deploy (edge functions, analytics) are omitted.
+const kongDeclarativeConfigTemplate = `_format_version: '2.1'
+_transform: true
+
+consumers:
+  - username: DASHBOARD
+  - username: anon
+    keyauth_credentials:
+      - key: $SUPABASE_ANON_KEY
+  - username: service_role
+    keyauth_credentials:
+      - key: $SUPABASE_SERVICE_KEY
+
+acls:
+  - consumer: anon
+    group: anon
+  - consumer: service_role
+    group: admin
+
+basicauth_credentials:
+  - consumer: DASHBOARD
+    username: '$DASHBOARD_USERNAME'
+    password: '$DASHBOARD_PASSWORD'
+
+services:
+  - name: auth-v1-open
+    url: http://{{PROJECT}}-auth:9999/verify
+    routes:
+      - name: auth-v1-open
+        strip_path: true
+        paths:
+          - /auth/v1/verify
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-callback
+    url: http://{{PROJECT}}-auth:9999/callback
+    routes:
+      - name: auth-v1-open-callback
+        strip_path: true
+        paths:
+          - /auth/v1/callback
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-authorize
+    url: http://{{PROJECT}}-auth:9999/authorize
+    routes:
+      - name: auth-v1-open-authorize
+        strip_path: true
+        paths:
+          - /auth/v1/authorize
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-jwks
+    url: http://{{PROJECT}}-auth:9999/.well-known/jwks.json
+    routes:
+      - name: auth-v1-open-jwks
+        strip_path: true
+        paths:
+          - /auth/v1/.well-known/jwks.json
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-sso-acs
+    url: http://{{PROJECT}}-auth:9999/sso/saml/acs
+    routes:
+      - name: auth-v1-open-sso-acs
+        strip_path: true
+        paths:
+          - /auth/v1/sso/saml/acs
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-sso-metadata
+    url: http://{{PROJECT}}-auth:9999/sso/saml/metadata
+    routes:
+      - name: auth-v1-open-sso-metadata
+        strip_path: true
+        paths:
+          - /auth/v1/sso/saml/metadata
+    plugins:
+      - name: cors
+
+  - name: auth-v1
+    url: http://{{PROJECT}}-auth:9999/
+    routes:
+      - name: auth-v1-all
+        strip_path: true
+        paths:
+          - /auth/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  - name: rest-v1-openapi
+    url: http://{{PROJECT}}-postgrest:3000/
+    routes:
+      - name: rest-v1-openapi-root
+        strip_path: true
+        expression: 'http.path == "/rest/v1/"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+
+  - name: rest-v1
+    url: http://{{PROJECT}}-postgrest:3000/
+    routes:
+      - name: rest-v1-all
+        strip_path: true
+        paths:
+          - /rest/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  - name: graphql-v1
+    url: http://{{PROJECT}}-postgrest:3000/rpc/graphql
+    routes:
+      - name: graphql-v1-all
+        strip_path: true
+        paths:
+          - /graphql/v1
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Content-Profile: graphql_public"
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  - name: realtime-v1-ws
+    url: http://{{PROJECT}}-realtime:4000/socket
+    protocol: ws
+    routes:
+      - name: realtime-v1-ws
+        strip_path: true
+        paths:
+          - /realtime/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "x-api-key:$LUA_RT_WS_EXPR"
+          replace:
+            querystring:
+              - "apikey:$LUA_RT_WS_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  - name: realtime-v1-rest-openapi
+    url: http://{{PROJECT}}-realtime:4000/api/openapi
+    protocol: http
+    routes:
+      - name: realtime-v1-rest-openapi
+        strip_path: true
+        paths:
+          - /realtime/v1/api/openapi
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Access is forbidden."
+
+  - name: realtime-v1-rest-tenants
+    url: http://{{PROJECT}}-realtime:4000/api/tenants
+    protocol: http
+    routes:
+      - name: realtime-v1-rest-tenants
+        strip_path: true
+        paths:
+          - /realtime/v1/api/tenants
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Access is forbidden."
+
+  - name: realtime-v1-rest
+    url: http://{{PROJECT}}-realtime:4000/api
+    protocol: http
+    routes:
+      - name: realtime-v1-rest
+        strip_path: true
+        paths:
+          - /realtime/v1/api
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  - name: storage-v1
+    url: http://{{PROJECT}}-storage:5000/
+    routes:
+      - name: storage-v1-all
+        strip_path: true
+        paths:
+          - /storage/v1/
+    plugins:
+      - name: cors
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: post-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization")
+              if auth == nil or auth == "" or auth:find("^%s*$") then
+                kong.service.request.clear_header("authorization")
+              end
+
+  - name: well-known-oauth
+    url: http://{{PROJECT}}-auth:9999/.well-known/oauth-authorization-server
+    routes:
+      - name: well-known-oauth
+        strip_path: true
+        paths:
+          - /.well-known/oauth-authorization-server
+    plugins:
+      - name: cors
+
+  - name: meta
+    url: http://{{PROJECT}}-meta:8080/
+    routes:
+      - name: meta-all
+        strip_path: true
+        paths:
+          - /pg/
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+
+  - name: mcp-blocker
+    url: http://{{PROJECT}}-studio:3000/api/mcp
+    routes:
+      - name: mcp-blocker-route
+        strip_path: true
+        paths:
+          - /api/mcp
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Access is forbidden."
+
+  - name: dashboard
+    url: http://{{PROJECT}}-studio:3000/
+    routes:
+      - name: dashboard-all
+        strip_path: true
+        paths:
+          - /
+    plugins:
+      - name: cors
+      - name: basic-auth
+        config:
+          hide_credentials: true
+`
 
 type KongBuilder struct{}
 
@@ -44,8 +432,7 @@ func (b *KongBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
-	plugins := "request-transformer,cors,key-auth,acl,basic-auth"
-	declConfigPath := "/tmp/kong.yml"
+	plugins := "request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function"
 
 	env := []corev1.EnvVar{
 		{
@@ -54,11 +441,15 @@ func (b *KongBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 		},
 		{
 			Name:  "KONG_DECLARATIVE_CONFIG",
-			Value: declConfigPath,
+			Value: kongDeclarativeConfigPath,
+		},
+		{
+			Name:  "KONG_ROUTER_FLAVOR",
+			Value: "expressions",
 		},
 		{
 			Name:  "KONG_PROXY_ACCESS_LOG",
-			Value: "/dev/stdout",
+			Value: "/dev/stdout combined",
 		},
 		{
 			Name:  "KONG_ADMIN_ACCESS_LOG",
@@ -81,8 +472,20 @@ func (b *KongBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 			Value: "LAST,A,CNAME",
 		},
 		{
+			Name:  "KONG_DNS_NOT_FOUND_TTL",
+			Value: "1",
+		},
+		{
 			Name:  "KONG_PLUGINS",
 			Value: plugins,
+		},
+		{
+			Name:  "KONG_NGINX_PROXY_PROXY_BUFFER_SIZE",
+			Value: "160k",
+		},
+		{
+			Name:  "KONG_NGINX_PROXY_PROXY_BUFFERS",
+			Value: "64 160k",
 		},
 	}
 
@@ -132,6 +535,18 @@ func (b *KongBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 	}
 	env = append(env, usernameEnv, passwordEnv)
 
+	healthProbe := &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"kong", "health"},
+			},
+		},
+		InitialDelaySeconds: 5,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      5,
+		FailureThreshold:    5,
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      project.Name + "-kong",
@@ -154,6 +569,22 @@ func (b *KongBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 							Image:     image,
 							Resources: resources,
 							Env:       env,
+							Command: []string{
+								"/bin/sh",
+								"/etc/kong/kong-entrypoint.sh",
+							},
+							ReadinessProbe: healthProbe,
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"kong", "health"},
+									},
+								},
+								InitialDelaySeconds: 15,
+								PeriodSeconds:       20,
+								TimeoutSeconds:      5,
+								FailureThreshold:    3,
+							},
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "proxy",
@@ -197,12 +628,6 @@ func (b *KongBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*appsv
 		},
 	}
 
-	deployment.Spec.Template.Spec.Containers[0].Command = []string{
-		"bash",
-		"-lc",
-		"eval \"echo \\\"$$(cat /etc/kong/kong.yml)\\\"\" > /tmp/kong.yml && export KONG_DECLARATIVE_CONFIG=/tmp/kong.yml && /docker-entrypoint.sh kong docker-start",
-	}
-
 	if project.Spec.Kong != nil && len(project.Spec.Kong.ExtraEnv) > 0 {
 		deployment.Spec.Template.Spec.Containers[0].Env = append(
 			deployment.Spec.Template.Spec.Containers[0].Env,
@@ -222,216 +647,7 @@ func BuildKongConfigMap(project *v1alpha1.SupabaseProject) *corev1.ConfigMap {
 		"app.kubernetes.io/managed-by": "supabase-operator",
 	}
 
-	var builder strings.Builder
-	builder.WriteString(`_format_version: '2.1'
-_transform: true
-
-consumers:
-  - username: DASHBOARD
-  - username: anon
-    keyauth_credentials:
-      - key: $SUPABASE_ANON_KEY
-  - username: service_role
-    keyauth_credentials:
-      - key: $SUPABASE_SERVICE_KEY
-
-acls:
-  - consumer: anon
-    group: anon
-  - consumer: service_role
-    group: admin
-
-basicauth_credentials:
-  - consumer: DASHBOARD
-    username: $DASHBOARD_USERNAME
-    password: $DASHBOARD_PASSWORD
-
-services:
-`)
-
-	builder.WriteString(fmt.Sprintf(`  - name: auth-v1-open
-    url: http://%s-auth:9999/verify
-    routes:
-      - name: auth-v1-open
-        strip_path: true
-        paths:
-          - /auth/v1/verify
-    plugins:
-      - name: cors
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: auth-v1-open-callback
-    url: http://%s-auth:9999/callback
-    routes:
-      - name: auth-v1-open-callback
-        strip_path: true
-        paths:
-          - /auth/v1/callback
-    plugins:
-      - name: cors
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: auth-v1-open-authorize
-    url: http://%s-auth:9999/authorize
-    routes:
-      - name: auth-v1-open-authorize
-        strip_path: true
-        paths:
-          - /auth/v1/authorize
-    plugins:
-      - name: cors
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: auth-v1
-    url: http://%s-auth:9999/
-    routes:
-      - name: auth-v1-all
-        strip_path: true
-        paths:
-          - /auth/v1/
-    plugins:
-      - name: cors
-      - name: key-auth
-        config:
-          hide_credentials: false
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-            - anon
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: rest-v1
-    url: http://%s-postgrest:3000/
-    routes:
-      - name: rest-v1-all
-        strip_path: true
-        paths:
-          - /rest/v1/
-    plugins:
-      - name: cors
-      - name: key-auth
-        config:
-          hide_credentials: true
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-            - anon
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: graphql-v1
-    url: http://%s-postgrest:3000/rpc/graphql
-    routes:
-      - name: graphql-v1-all
-        strip_path: true
-        paths:
-          - /graphql/v1
-    plugins:
-      - name: cors
-      - name: key-auth
-        config:
-          hide_credentials: true
-      - name: request-transformer
-        config:
-          add:
-            headers:
-              - Content-Profile:graphql_public
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-            - anon
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: realtime-v1-ws
-    url: http://%s-realtime:4000/socket
-    protocol: ws
-    routes:
-      - name: realtime-v1-ws
-        strip_path: true
-        paths:
-          - /realtime/v1/
-    plugins:
-      - name: cors
-      - name: key-auth
-        config:
-          hide_credentials: false
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-            - anon
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: realtime-v1-rest
-    url: http://%s-realtime:4000/api
-    routes:
-      - name: realtime-v1-rest
-        strip_path: true
-        paths:
-          - /realtime/v1/api
-    plugins:
-      - name: cors
-      - name: key-auth
-        config:
-          hide_credentials: false
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-            - anon
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: storage-v1
-    url: http://%s-storage:5000/
-    routes:
-      - name: storage-v1-all
-        strip_path: true
-        paths:
-          - /storage/v1/
-    plugins:
-      - name: cors
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: meta
-    url: http://%s-meta:8080/
-    routes:
-      - name: meta-all
-        strip_path: true
-        paths:
-          - /pg/
-    plugins:
-      - name: key-auth
-        config:
-          hide_credentials: false
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-
-`, project.Name))
-	builder.WriteString(fmt.Sprintf(`  - name: dashboard
-    url: http://%s-studio:3000/
-    routes:
-      - name: dashboard-all
-        strip_path: true
-        paths:
-          - /
-    plugins:
-      - name: cors
-      - name: basic-auth
-        config:
-          hide_credentials: true
-`, project.Name))
-
-	kongConfig := builder.String()
+	kongConfig := strings.ReplaceAll(kongDeclarativeConfigTemplate, "{{PROJECT}}", project.Name)
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -439,7 +655,10 @@ services:
 			Namespace: project.Namespace,
 			Labels:    labels,
 		},
-		Data: map[string]string{"kong.yml": kongConfig},
+		Data: map[string]string{
+			"kong.yml":           kongConfig,
+			"kong-entrypoint.sh": kongEntrypointScript,
+		},
 	}
 }
 

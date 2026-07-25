@@ -116,7 +116,7 @@ func (b *PostgRESTBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*
 			Value: "anon",
 		},
 		{
-			Name:  "PGRST_DB_SCHEMA",
+			Name:  "PGRST_DB_SCHEMAS",
 			Value: "public",
 		},
 		{

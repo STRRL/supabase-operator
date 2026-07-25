@@ -199,7 +199,7 @@ spec:
                       type: object
                     type: array
                   image:
-                    default: supabase/gotrue:v2.180.0
+                    default: supabase/gotrue:v2.189.0
                     type: string
                   oauthSecretRef:
                     description: |-
@@ -519,7 +519,7 @@ spec:
                       type: object
                     type: array
                   image:
-                    default: kong:2.8.1
+                    default: kong/kong:3.9.1
                     type: string
                   replicas:
                     default: 1
@@ -748,7 +748,7 @@ spec:
                       type: object
                     type: array
                   image:
-                    default: supabase/postgres-meta:v0.93.1
+                    default: supabase/postgres-meta:v0.96.6
                     type: string
                   replicas:
                     default: 1
@@ -977,7 +977,7 @@ spec:
                       type: object
                     type: array
                   image:
-                    default: postgrest/postgrest:v13.0.7
+                    default: postgrest/postgrest:v14.12
                     type: string
                   replicas:
                     default: 1
@@ -1209,7 +1209,7 @@ spec:
                       type: object
                     type: array
                   image:
-                    default: supabase/realtime:v2.51.11
+                    default: supabase/realtime:v2.102.3
                     type: string
                   replicas:
                     default: 1
@@ -1470,7 +1470,7 @@ spec:
                       type: object
                     type: array
                   image:
-                    default: supabase/storage-api:v1.32.0
+                    default: supabase/storage-api:v1.60.4
                     type: string
                   replicas:
                     default: 1
@@ -1716,7 +1716,7 @@ spec:
                       type: object
                     type: array
                   image:
-                    default: supabase/studio:2025.10.01-sha-8460121
+                    default: supabase/studio:2026.07.07-sha-a6a04f2
                     type: string
                   publicUrl:
                     type: string
