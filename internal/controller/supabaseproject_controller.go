@@ -201,9 +201,18 @@ func (r *SupabaseProjectReconciler) reconcileAllComponents(ctx context.Context, 
 		return componentsStatus, err
 	}
 	existingKongConfigMap := &corev1.ConfigMap{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: kongConfigMap.Namespace, Name: kongConfigMap.Name}, existingKongConfigMap); err != nil && apierrors.IsNotFound(err) {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: kongConfigMap.Namespace, Name: kongConfigMap.Name}, existingKongConfigMap); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return componentsStatus, err
+		}
 		if err := r.Create(ctx, kongConfigMap); err != nil {
 			logger.Error(err, "Failed to create Kong ConfigMap")
+			return componentsStatus, err
+		}
+	} else {
+		existingKongConfigMap.Data = kongConfigMap.Data
+		if err := r.Update(ctx, existingKongConfigMap); err != nil {
+			logger.Error(err, "Failed to update Kong ConfigMap")
 			return componentsStatus, err
 		}
 	}

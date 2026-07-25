@@ -63,7 +63,15 @@ func (b *StudioBuilder) BuildDeployment(project *v1alpha1.SupabaseProject) (*app
 		{Name: "NEXT_PUBLIC_ENABLE_LOGS", Value: "false"},
 		{Name: "NEXT_ANALYTICS_BACKEND_PROVIDER", Value: "postgres"},
 		{Name: "ENABLED_FEATURES_LOGS_ALL", Value: "false"},
-		{Name: "POSTGRES_USER_READ_WRITE", Value: "postgres"},
+		{
+			Name: "POSTGRES_USER_READ_WRITE",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: project.Spec.Database.SecretRef.Name},
+					Key:                  "username",
+				},
+			},
+		},
 		{
 			Name: "POSTGRES_HOST",
 			ValueFrom: &corev1.EnvVarSource{
