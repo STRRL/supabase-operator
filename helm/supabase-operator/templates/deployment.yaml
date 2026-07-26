@@ -47,6 +47,7 @@ spec:
             {{- else }}
             - --metrics-bind-address=0
             {{- end }}
+            - --dashboard-bind-address=:{{ .Values.dashboard.port }}
             {{- range .Values.extraArgs }}
             - {{ . | quote }}
             {{- end }}
@@ -56,12 +57,15 @@ spec:
             {{- tpl (toYaml .) $ | nindent 12 }}
             {{- end }}
           {{- end }}
-          {{- if .Values.webhook.enabled }}
           ports:
+            - containerPort: {{ .Values.dashboard.port }}
+              name: dashboard
+              protocol: TCP
+            {{- if .Values.webhook.enabled }}
             - containerPort: {{ .Values.webhook.targetPort }}
               name: webhook-server
               protocol: TCP
-          {{- end }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
