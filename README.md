@@ -92,6 +92,8 @@ Pass additional overrides (for example `.Values.extraArgs` or `.Values.resources
 
 ## Quick Start
 
+For a fresh cluster, follow the [verified CloudNativePG and MinIO quickstart](docs/quickstart.md).
+
 ### 1. Create Database Secret
 
 ```bash
