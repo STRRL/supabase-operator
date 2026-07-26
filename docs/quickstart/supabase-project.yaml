@@ -1,0 +1,18 @@
+apiVersion: supabase.strrl.dev/v1alpha1
+kind: SupabaseProject
+metadata:
+  name: quickstart
+  namespace: supabase-quickstart
+spec:
+  projectId: quickstart
+  database:
+    secretRef:
+      name: supabase-db-credentials
+    sslMode: require
+  storage:
+    secretRef:
+      name: supabase-storage-credentials
+    forcePathStyle: true
+  studio:
+    dashboardBasicAuthSecretRef:
+      name: supabase-studio-basic-auth
