@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: supabase-quickstart
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-superuser
+  namespace: supabase-quickstart
+type: kubernetes.io/basic-auth
+stringData:
+  username: postgres
+  password: quickstart-postgres-password
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: supabase-postgres
+  namespace: supabase-quickstart
+spec:
+  instances: 1
+  imageName: supabase/postgres:15.14.1.021
+  postgresUID: 101
+  postgresGID: 102
+  enableSuperuserAccess: true
+  superuserSecret:
+    name: postgres-superuser
+  storage:
+    size: 1Gi

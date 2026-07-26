@@ -1,0 +1,23 @@
+mode: standalone
+
+rootUser: storage-admin
+rootPassword: quickstart-minio-password
+
+replicas: 1
+
+persistence:
+  enabled: true
+  size: 1Gi
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 250m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+buckets:
+  - name: supabase-storage
+    policy: none
+    purge: false
