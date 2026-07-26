@@ -107,6 +107,10 @@ Expected result:
 deployment "supabase-operator" successfully rolled out
 ```
 
+Version `2026.7.25` is the verified Phase A release. It does not include the
+Dashboard. Use a later release that includes the Dashboard before following
+step 6.
+
 ## 4. Create the credential Secrets
 
 ```sh
@@ -151,7 +155,58 @@ quickstart   Running
 The project uses `sslMode: require` for PostgreSQL and path style S3
 requests for MinIO.
 
-## 6. Open Studio
+## 6. Open the Dashboard
+
+The operator creates the Dashboard Service by default. No Helm value is
+required.
+
+Check the Service:
+
+```sh
+kubectl get service supabase-operator-dashboard \
+  --namespace supabase-operator-system
+```
+
+Expected result:
+
+```text
+NAME                          TYPE        PORT(S)
+supabase-operator-dashboard   ClusterIP   8080/TCP
+```
+
+Forward the Dashboard in one terminal:
+
+```sh
+kubectl port-forward \
+  --namespace supabase-operator-system \
+  service/supabase-operator-dashboard \
+  18080:8080
+```
+
+Open <http://127.0.0.1:18080/>. The page lists each `SupabaseProject`, its
+phase, and component readiness.
+
+You can also check the Dashboard API:
+
+```sh
+curl \
+  --fail \
+  --silent \
+  --show-error \
+  http://127.0.0.1:18080/api/projects
+```
+
+Expected response:
+
+```json
+{"projects":[...]}
+```
+
+The Dashboard has no built in authentication. Its Service is `ClusterIP` by
+default. Keep the port forward on localhost and do not expose the Service
+outside the cluster.
+
+## 7. Open Studio
 
 Forward Kong in one terminal:
 
