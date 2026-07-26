@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Supabase Operator</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #101513;
+      color: #e7ece9;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 15% 0%, rgba(62, 207, 142, 0.12), transparent 30rem),
+        #101513;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 48px 0 80px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1px solid rgba(62, 207, 142, 0.35);
+      border-radius: 12px;
+      background: rgba(62, 207, 142, 0.1);
+      color: #3ecf8e;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 650;
+    }
+
+    .brand p,
+    .intro p {
+      margin: 5px 0 0;
+      color: #8f9d96;
+      font-size: 13px;
+    }
+
+    .refresh {
+      padding: 9px 15px;
+      border: 1px solid #314039;
+      border-radius: 8px;
+      background: #18201c;
+      color: #dce5e0;
+      cursor: pointer;
+    }
+
+    .refresh:hover {
+      border-color: #4f645a;
+      background: #1d2823;
+    }
+
+    .refresh:disabled {
+      cursor: wait;
+      opacity: 0.6;
+    }
+
+    .intro {
+      margin-bottom: 20px;
+    }
+
+    .intro h2 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .panel {
+      overflow: hidden;
+      border: 1px solid #29352f;
+      border-radius: 12px;
+      background: rgba(20, 27, 24, 0.94);
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.22);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.5fr) minmax(140px, 1fr) 140px 160px 170px;
+      align-items: center;
+      min-height: 68px;
+      padding: 0 22px;
+      border-top: 1px solid #26312c;
+      gap: 18px;
+    }
+
+    .row:first-child {
+      border-top: 0;
+    }
+
+    .header {
+      min-height: 44px;
+      background: #151d19;
+      color: #718078;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .project-name {
+      color: #f2f7f4;
+      font-weight: 600;
+    }
+
+    .project-id,
+    .namespace,
+    .updated {
+      overflow: hidden;
+      color: #8f9d96;
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .project-id {
+      margin-top: 5px;
+    }
+
+    .phase {
+      justify-self: start;
+      padding: 5px 9px;
+      border: 1px solid #405048;
+      border-radius: 999px;
+      background: #222c27;
+      color: #b4c1ba;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .phase.running {
+      border-color: rgba(62, 207, 142, 0.35);
+      background: rgba(62, 207, 142, 0.09);
+      color: #62d9a2;
+    }
+
+    .phase.failed {
+      border-color: rgba(239, 92, 92, 0.38);
+      background: rgba(239, 92, 92, 0.09);
+      color: #f38a8a;
+    }
+
+    .health {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: #b9c5bf;
+      font-size: 13px;
+    }
+
+    .health-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #64736b;
+    }
+
+    .health-dot.ready {
+      background: #3ecf8e;
+      box-shadow: 0 0 0 4px rgba(62, 207, 142, 0.09);
+    }
+
+    .state {
+      display: grid;
+      min-height: 220px;
+      place-items: center;
+      padding: 32px;
+      color: #87958e;
+      text-align: center;
+    }
+
+    .error {
+      color: #f38a8a;
+    }
+
+    @media (max-width: 900px) {
+      .row {
+        grid-template-columns: 1.5fr 1fr 120px;
+      }
+
+      .header > :nth-child(4),
+      .header > :nth-child(5),
+      .row > :nth-child(4),
+      .row > :nth-child(5) {
+        display: none;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .page {
+        width: min(100% - 24px, 1180px);
+        padding-top: 24px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .brand p {
+        display: none;
+      }
+
+      .row {
+        grid-template-columns: 1fr 110px;
+        padding: 0 16px;
+      }
+
+      .header > :nth-child(2),
+      .row > :nth-child(2) {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">S</div>
+        <div>
+          <h1>Supabase Operator</h1>
+          <p>Kubernetes project control plane</p>
+        </div>
+      </div>
+      <button class="refresh" id="refresh" type="button">Refresh</button>
+    </header>
+
+    <section class="intro">
+      <h2>Projects</h2>
+      <p id="summary">Loading projects</p>
+    </section>
+
+    <section class="panel" id="panel">
+      <div class="state">Loading projects</div>
+    </section>
+  </main>
+
+  <script>
+    const panel = document.querySelector("#panel");
+    const refreshButton = document.querySelector("#refresh");
+    const summary = document.querySelector("#summary");
+
+    function escapeText(value) {
+      const element = document.createElement("span");
+      element.textContent = value || "";
+      return element.innerHTML;
+    }
+
+    function phaseClass(phase) {
+      const value = (phase || "").toLowerCase();
+      if (value === "running") return "running";
+      if (value === "failed") return "failed";
+      return "";
+    }
+
+    function projectRow(project) {
+      const updated = project.updatedAt
+        ? new Date(project.updatedAt).toLocaleString()
+        : "Not reported";
+      const ready = project.readyComponents === project.totalComponents;
+      const phase = project.phase || "Pending";
+
+      return `
+        <div class="row">
+          <div>
+            <div class="project-name">${escapeText(project.name)}</div>
+            <div class="project-id">${escapeText(project.projectId)}</div>
+          </div>
+          <div class="namespace">${escapeText(project.namespace)}</div>
+          <div><span class="phase ${phaseClass(phase)}">${escapeText(phase)}</span></div>
+          <div class="health">
+            <span class="health-dot ${ready ? "ready" : ""}"></span>
+            ${project.readyComponents} / ${project.totalComponents} ready
+          </div>
+          <div class="updated">${escapeText(updated)}</div>
+        </div>
+      `;
+    }
+
+    function render(projects) {
+      summary.textContent = `${projects.length} ${projects.length === 1 ? "project" : "projects"}`;
+      if (projects.length === 0) {
+        panel.innerHTML = `
+          <div class="state">
+            No SupabaseProject resources found.
+          </div>
+        `;
+        return;
+      }
+
+      panel.innerHTML = `
+        <div class="row header">
+          <div>Project</div>
+          <div>Namespace</div>
+          <div>Phase</div>
+          <div>Components</div>
+          <div>Last update</div>
+        </div>
+        ${projects.map(projectRow).join("")}
+      `;
+    }
+
+    async function loadProjects() {
+      refreshButton.disabled = true;
+      try {
+        const response = await fetch("/api/projects", {
+          headers: { "Accept": "application/json" },
+        });
+        if (!response.ok) {
+          throw new Error(`Request failed with HTTP ${response.status}`);
+        }
+        const body = await response.json();
+        render(body.projects || []);
+      } catch (error) {
+        summary.textContent = "Could not load projects";
+        panel.innerHTML = `<div class="state error">${escapeText(error.message)}</div>`;
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    refreshButton.addEventListener("click", loadProjects);
+    loadProjects();
+  </script>
+</body>
+</html>

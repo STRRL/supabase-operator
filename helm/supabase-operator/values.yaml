@@ -55,6 +55,10 @@ metricsService:
   annotations: {}
   port: 8443
 
+dashboard:
+  annotations: {}
+  port: 8080
+
 priorityClassName: ""
 extraArgs: []
 extraEnv: []
