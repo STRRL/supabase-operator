@@ -99,7 +99,7 @@ type StorageConfig struct {
 }
 
 type KongConfig struct {
-	// +kubebuilder:default="kong/kong:3.9.1"
+	// +kubebuilder:default="kong/kong:3.9.3"
 	// +optional
 	Image string `json:"image,omitempty"`
 
@@ -213,7 +213,7 @@ type MetaConfig struct {
 }
 
 type StudioConfig struct {
-	// +kubebuilder:default="supabase/studio:2026.07.07-sha-a6a04f2"
+	// +kubebuilder:default="supabase/studio:2026.08.03-sha-022b374"
 	// +optional
 	Image string `json:"image,omitempty"`
 
