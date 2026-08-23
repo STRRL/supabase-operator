@@ -22,8 +22,10 @@ TYPES_FILE="api/v1alpha1/supabaseproject_types.go"
 # Format: "compose_service constant_name struct_name"
 # The db service is intentionally not listed, the operator requires a user
 # provided PostgreSQL so DefaultPostgresImage is never synced from upstream.
+# The kong service is also not listed. Upstream removed Kong from the default
+# compose file (supabase/supabase PR #48153, Envoy is the default gateway
+# now), so DefaultKongImage is pinned by hand like DefaultPostgresImage.
 MAPPINGS=(
-    "kong DefaultKongImage KongConfig"
     "auth DefaultAuthImage AuthConfig"
     "rest DefaultPostgRESTImage PostgRESTConfig"
     "realtime DefaultRealtimeImage RealtimeConfig"
@@ -70,13 +72,15 @@ update_marker() {
 }
 
 changed=0
+missing=()
 for entry in "${MAPPINGS[@]}"; do
     read -r service constant struct <<< "$entry"
 
     new_image="$(lookup_image "$service")"
     if [ -z "$new_image" ]; then
-        echo "ERROR: service '${service}' not found in upstream compose file" >&2
-        exit 1
+        echo "WARNING: service '${service}' not found in upstream compose file, skipping" >&2
+        missing+=("$service")
+        continue
     fi
 
     old_image="$(current_constant "$constant")"
@@ -93,8 +97,15 @@ done
 
 if [ "$changed" -eq 0 ]; then
     echo "All component images are up to date."
-    exit 0
+else
+    gofmt -w "$CONSTANTS_FILE" "$TYPES_FILE"
+    echo "Done. Run 'make manifests' to regenerate the CRD schema."
 fi
 
-gofmt -w "$CONSTANTS_FILE" "$TYPES_FILE"
-echo "Done. Run 'make manifests' to regenerate the CRD schema."
+# A missing service means the upstream compose structure changed. The other
+# components are still synced above, but the run must fail so the workflow
+# raises an alert.
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "ERROR: missing upstream services: ${missing[*]}. Upstream structure changed, needs a human." >&2
+    exit 1
+fi

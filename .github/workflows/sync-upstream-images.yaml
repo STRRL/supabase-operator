@@ -55,6 +55,6 @@ jobs:
             - `helm/supabase-operator/crds/` (regenerated)
 
             Please review the version changes and make sure the e2e workflow
-            passes before merging. Major version jumps (for example Kong)
-            may need manual config changes in the component builders.
+            passes before merging. Major version jumps may need manual
+            config changes in the component builders.
           delete-branch: true
