@@ -131,7 +131,7 @@ Configuration for Kong API Gateway.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `image` | string | No | `kong:2.8.1` | Container image for Kong |
+| `image` | string | No | `kong/kong:3.9.1` | Container image for Kong |
 | `resources` | [ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#resourcerequirements-v1-core) | No | See below | CPU and memory resource requirements |
 | `replicas` | int32 | No | `1` | Number of replicas. Range: 0-10 |
 | `extraEnv` | [][EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#envvar-v1-core) | No | `[]` | Additional environment variables |
