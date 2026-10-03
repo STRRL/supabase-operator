@@ -17,7 +17,7 @@ The Supabase Operator enables you to deploy complete Supabase instances on Kuber
 ## Architecture
 
 The operator manages:
-- **Kong**: API Gateway (v2.8.1)
+- **Kong**: API Gateway (v3.9.1)
 - **Auth**: GoTrue authentication service (v2.177.0)
 - **PostgREST**: Automatic REST API (v12.2.12)
 - **Realtime**: WebSocket server (v2.34.47)
@@ -298,7 +298,7 @@ status:
     kong:
       phase: Running
       ready: true
-      version: kong:2.8.1
+      version: kong/kong:3.9.1
       replicas: 1
       readyReplicas: 1
     auth:

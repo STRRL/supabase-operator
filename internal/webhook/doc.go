@@ -36,7 +36,7 @@
 // Mutating Logic:
 //
 // The mutating webhook applies defaults:
-//   - Component images (e.g., kong:2.8.1)
+//   - Component images (e.g., kong/kong:3.9.1)
 //   - Resource requirements (memory, CPU)
 //   - Replica counts (defaults to 1)
 //   - SSL mode for database (defaults to "require")

@@ -232,7 +232,7 @@ status:
     kong:
       phase: Running
       ready: true
-      version: "kong:2.8.1"
+      version: "kong/kong:3.9.1"
       replicas: 1
       readyReplicas: 1
     auth:
