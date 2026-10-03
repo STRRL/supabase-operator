@@ -24,9 +24,9 @@
 
 > Note: the image list above is a snapshot from 2025-10-03 and is kept as is for
 > history. The live defaults are in `api/v1alpha1/wellknown_images.go` and in the
-> kubebuilder default markers in `api/v1alpha1/supabaseproject_types.go`, which are
-> updated together by `hack/sync-upstream-images.sh`. Read those files for the
-> current values.
+> kubebuilder default markers in `api/v1alpha1/supabaseproject_types.go`. Read
+> those files for the current values and for which images are synced from
+> upstream by `hack/sync-upstream-images.sh` and which are pinned by hand.
 
 ### 3. Resource Requirements
 **Decision**: Controller applies hardcoded defaults when Resources is nil
